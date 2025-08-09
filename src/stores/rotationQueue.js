@@ -125,8 +125,13 @@ export const useRotationQueueStore = defineStore("rotationQueue", () => {
       easing: Easing.Sine.Out(),
       duration: DURATION,
       onUpdate: (tween) => {        
-        // 使用世界坐标系旋转
-        layerGroup.rotateOnWorldAxis(rotationAxis, tween.delta * angle);
+        // 将世界坐标轴转换到layerGroup的局部坐标系
+        const localAxis = rotationAxis.clone();
+        layerGroup.updateMatrixWorld();
+        const inverseMatrix = new THREE.Matrix4().copy(layerGroup.matrixWorld).invert();
+        localAxis.applyMatrix4(inverseMatrix).normalize();
+        
+        layerGroup.rotateOnAxis(localAxis, tween.delta * angle);
 
       },
       onComplete: () => {
