@@ -7,8 +7,15 @@ const rotationQueueStore = useRotationQueueStore();
 const cubeStore = useCubeStore();
 
 const scramble = () => {
+	// console.log(randomScramble,"!!!!!!")
 	cubeStore.scrambleCube();
 }
+const solve = () =>{
+
+	console.log(cubeStore.solve(),"!!!!!!")
+
+}
+
 // 定义点击处理函数
 const handleRotate = (face, direction = 1) => {
 	rotationQueueStore.addRotationToQueue(face, direction);
@@ -97,6 +104,7 @@ const queueLength = computed(() => rotationQueueStore.queueLength());
 				<span class="btn-icon">🗑️</span>
 				打乱
 			</button>
+			<button class="control-btn clear-btn" @click="solve">求解十字</button>
 		</div>
 	</div>
 </template>

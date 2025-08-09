@@ -368,6 +368,214 @@ export function useCube(scene) {
 		return isScrambling;
 	}
 
+	function getCubeState(){
+		console.log("=== 魔方状态信息 ===");
+		
+		// 生成魔方状态字符串
+		const stateString = getCubeStateString();
+		// console.log(`\n魔方状态字符串: ${stateString}`);
+		// console.log(`长度: ${stateString.length} (应该是54)`);
+		
+		// 使用新的getFaceOrientationInfo函数获取详细信息
+		const orientationInfo = getFaceOrientationInfo();
+		
+		orientationInfo.forEach((pieceInfo) => {
+			// console.log(`\n--- 魔方小块 ${pieceInfo.pieceIndex} ---`);
+			// console.log(`位置: (${pieceInfo.position.x}, ${pieceInfo.position.y}, ${pieceInfo.position.z})`);
+			
+			if (pieceInfo.faces.length > 0) {
+				console.log("面的信息:");
+				pieceInfo.faces.forEach((face) => {
+					// console.log(`  ${face.originalName} → ${face.currentOrientation} (${face.displayName}): ${face.color} (0x${face.hexColor.toString(16)})`);
+					// console.log(`    位置: (${face.position.x.toFixed(3)}, ${face.position.y.toFixed(3)}, ${face.position.z.toFixed(3)})`);
+					// console.log(`    旋转: (${face.rotation.x.toFixed(3)}, ${face.rotation.y.toFixed(3)}, ${face.rotation.z.toFixed(3)})`);
+					// console.log(`    世界法向量: (${face.worldNormal.x.toFixed(3)}, ${face.worldNormal.y.toFixed(3)}, ${face.worldNormal.z.toFixed(3)})`);
+				});
+			} else {
+				// console.log("  这是一个中心块，没有彩色面");
+			}
+		});
+		
+		console.log("\n=== 原始数据对比 ===");
+		pieces.forEach((piece, index) => {
+			let piecePosition = getPiecePosition(piece);
+			// console.log(`小块 ${index}:`, {
+			// 	position: piecePosition,
+			// 	edges: piece.userData.edges,
+			// 	childrenCount: piece.children.length
+			// });
+		});
+		
+		// 返回魔方状态字符串
+		return stateString;
+	}
+
+	// 根据面的实际朝向确定它当前代表哪个面（世界坐标系）
+	function getCurrentFaceOrientation(piece, face) {
+		// 获取魔方小块的世界矩阵
+		piece.updateMatrixWorld();
+		
+		// 创建面的法向量（假设面朝Z轴正方向）
+		const faceNormal = new THREE.Vector3(0, 0, 1);
+		
+		// 应用面的局部变换
+		face.updateMatrix();
+		faceNormal.applyMatrix4(face.matrix);
+		
+		// 应用魔方小块的世界变换
+		faceNormal.applyMatrix4(piece.matrixWorld);
+		
+		// 根据法向量确定朝向
+		const absX = Math.abs(faceNormal.x);
+		const absY = Math.abs(faceNormal.y);
+		const absZ = Math.abs(faceNormal.z);
+		
+		// 找到最大分量
+		if (absX > absY && absX > absZ) {
+			return faceNormal.x > 0 ? 'R' : 'L';
+		} else if (absY > absX && absY > absZ) {
+			return faceNormal.y > 0 ? 'U' : 'D';
+		} else if (absZ > absX && absZ > absY) {
+			return faceNormal.z > 0 ? 'F' : 'B';
+		}
+		
+		return 'unknown';
+	}
+
+	// 解析面的颜色朝向信息
+	function getFaceOrientationInfo() {
+		const faceMap = {
+			'L': { name: '左面', color: '红色', hexColor: 0xff0000 },
+			'R': { name: '右面', color: '橙色', hexColor: 0xff8c00 },
+			'D': { name: '下面', color: '黄色', hexColor: 0xffff00 },
+			'U': { name: '上面', color: '绿色', hexColor: 0x00ff00 },
+			'B': { name: '后面', color: '蓝色', hexColor: 0x0000ff },
+			'F': { name: '前面', color: '白色', hexColor: 0xffffff }
+		};
+
+		const orientationInfo = [];
+		
+		pieces.forEach((piece, pieceIndex) => {
+			const pieceInfo = {
+				pieceIndex: pieceIndex,
+				position: piece.position.clone().multiplyScalar(3).round(),
+				faces: []
+			};
+
+			// 遍历piece的所有子对象（面）
+			piece.children.forEach((child) => {
+				if (child.name && faceMap[child.name]) {
+					// 获取面的当前朝向（世界坐标系）
+					const currentOrientation = getCurrentFaceOrientation(piece, child);
+					
+					const faceInfo = {
+						originalName: child.name, // 原始名称
+						currentOrientation: currentOrientation, // 当前朝向
+						displayName: faceMap[currentOrientation] ? faceMap[currentOrientation].name : '未知',
+						color: faceMap[child.name].color, // 颜色基于原始名称
+						hexColor: faceMap[child.name].hexColor,
+						position: child.position.clone(),
+						rotation: child.rotation.clone(),
+						matrix: child.matrix.clone(),
+						worldNormal: new THREE.Vector3(0, 0, 1).applyMatrix4(child.matrix).applyMatrix4(piece.matrixWorld)
+					};
+					pieceInfo.faces.push(faceInfo);
+				}
+			});
+
+			orientationInfo.push(pieceInfo);
+		});
+
+		return orientationInfo;
+	}
+
+	// 生成魔方状态字符串 (UUUUUUUUURRRRRRRRRFFFFFFFFFFDDDDDDDDDLLLLLLLLLLBBBBBBBBB)
+	function getCubeStateString() {
+		const faceMap = {
+			'L': { name: '左面', color: '红色', hexColor: 0xff0000, char: 'L' },
+			'R': { name: '右面', color: '橙色', hexColor: 0xff8c00, char: 'R' },
+			'D': { name: '下面', color: '黄色', hexColor: 0xffff00, char: 'D' },
+			'U': { name: '上面', color: '绿色', hexColor: 0x00ff00, char: 'U' },
+			'B': { name: '后面', color: '蓝色', hexColor: 0x0000ff, char: 'B' },
+			'F': { name: '前面', color: '白色', hexColor: 0xffffff, char: 'F' }
+		};
+
+		// 初始化6个面的数组，每个面9个位置
+		const faces = {
+			'U': new Array(9).fill(''),
+			'R': new Array(9).fill(''),
+			'F': new Array(9).fill(''),
+			'D': new Array(9).fill(''),
+			'L': new Array(9).fill(''),
+			'B': new Array(9).fill('')
+		};
+
+		// 遍历所有魔方小块
+		pieces.forEach((piece) => {
+			const piecePosition = getPiecePosition(piece);
+			
+			// 遍历每个小块的面
+			piece.children.forEach((face) => {
+				if (face.name && faceMap[face.name]) {
+					// 获取面的当前朝向（世界坐标系）
+					const currentOrientation = getCurrentFaceOrientation(piece, face);
+					
+					if (currentOrientation && faceMap[currentOrientation]) {
+						// 根据小块位置确定在面中的索引
+						const faceIndex = getFaceIndex(piecePosition, currentOrientation);
+						
+						if (faceIndex !== -1) {
+							// 获取颜色字符
+							const colorChar = faceMap[face.name].char;
+							faces[currentOrientation][faceIndex] = colorChar;
+						}
+					}
+				}
+			});
+		});
+
+		// 按顺序拼接：U R F D L B
+		const stateString = faces.U.join('') + faces.R.join('') + faces.F.join('') + 
+						   faces.D.join('') + faces.L.join('') + faces.B.join('');
+		
+		return stateString;
+	}
+
+	// 根据小块位置和面朝向确定在面中的索引
+	function getFaceIndex(piecePosition, faceOrientation) {
+		// 面的索引映射（从左上角开始，按行排列）
+		// 0 1 2
+		// 3 4 5
+		// 6 7 8
+		
+		const x = piecePosition.x;
+		const y = piecePosition.y;
+		const z = piecePosition.z;
+		
+		switch (faceOrientation) {
+			case 'U': // 上面 (y = 1)
+				if (y !== 1) return -1;
+				return (1 - z) * 3 + (x + 1);
+			case 'D': // 下面 (y = -1)
+				if (y !== -1) return -1;
+				return (z + 1) * 3 + (x + 1);
+			case 'L': // 左面 (x = -1)
+				if (x !== -1) return -1;
+				return (1 - z) * 3 + (y + 1);
+			case 'R': // 右面 (x = 1)
+				if (x !== 1) return -1;
+				return (z + 1) * 3 + (y + 1);
+			case 'F': // 前面 (z = 1)
+				if (z !== 1) return -1;
+				return (1 - y) * 3 + (x + 1);
+			case 'B': // 后面 (z = -1)
+				if (z !== -1) return -1;
+				return (y + 1) * 3 + (1 - x);
+			default:
+				return -1;
+		}
+	}
+
 
 	return {
 		// 状态
@@ -398,9 +606,12 @@ export function useCube(scene) {
 		getLayerGroup,
 		addLayerGroup,
 		removeLayerGroup,
+		getCubeState,
 
 		// 打乱相关方法
 		scrambleCube,
 		getScrambleState,
+		getFaceOrientationInfo,
+		getCubeStateString,
 	};
 }

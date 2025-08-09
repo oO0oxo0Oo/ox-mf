@@ -1,3 +1,5 @@
+
+
 export function useScramble(length = 15) {
     const queue = [];
     const sequence = ['U', 'U\'', 'D', 'D\'', 'L', 'L\'', 'R', 'R\'', 'F', 'F\'', 'B', 'B\'']

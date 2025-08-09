@@ -91,11 +91,20 @@ export const useCubeStore = defineStore("cube", () => {
     gameData.scramble = scrambleData
   }
 
-  function scrambleCube() {
+  function scrambleCube(queue) {
     const rotationQueueStore = useRotationQueueStore();
-    const queue = useScramble();
+    if (!queue) {
+      queue = useScramble(); // 如果没有传入队列，使用默认打乱
+    }
     rotationQueueStore.rotationQueue(queue);
     // state.value = 'scrambling'
+  }
+
+  function solve() {
+    // 获取当前魔方状态
+    const currentState = cubeInstance.getCubeState();  
+    
+    return currentState;
   }
 
   // 配置方法
@@ -127,7 +136,7 @@ export const useCubeStore = defineStore("cube", () => {
     scrambleCube,
     setCubeType,
     getAvailableCubeTypes,
-    
+    solve,
 
     
     // 获取实例
