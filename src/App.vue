@@ -2,12 +2,16 @@
   <div class="app">
     <ControlsDemo />
     <RotationMenu />
+    <!-- <TimelineDemo /> -->
+    <!-- <Begin /> -->
   </div>
 </template>
 
 <script setup>
 import ControlsDemo from './test/ControlsDemo.vue'
 import RotationMenu from './components/RotationMenu.vue'
+import TimelineDemo from './test/TimelineDemo.vue';
+import Begin from './components/Begin.vue';
 </script>
 
 <style>

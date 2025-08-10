@@ -12,10 +12,10 @@ export const useCubeStore = defineStore("cube", () => {
   
   // 配置
   const config = reactive({
-    size: 3,
+    size: 2,
     theme: 'default',
     animationSpeed: 1.0,
-    cubeType: 'cube3'
+    cubeType: 'cube2'
   })
 
   // 游戏数据
