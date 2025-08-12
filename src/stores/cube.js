@@ -12,10 +12,15 @@ export const useCubeStore = defineStore("cube", () => {
   
   // 配置
   const config = reactive({
-    size: 2,
+    size: 3,
     theme: 'default',
     animationSpeed: 1.0,
-    cubeType: 'cube2'
+    cubeType: 'cube3',
+    pieceSize: 1/3,  // 小立方体边长，默认 1/3
+    customPieceSize: null,  // 自定义小立方体边长，用于generateModel函数
+    pieceCornerRadius: 0.12,  // 魔方块角半径
+    edgeCornerRoundness: 0.08,  // 边缘圆润度
+    edgeScale: 1.0  // 边缘缩放比例
   })
 
   // 游戏数据
@@ -112,6 +117,46 @@ export const useCubeStore = defineStore("cube", () => {
     config.cubeType = type
   }
 
+  function setPieceSize(size) {
+    config.pieceSize = size
+    // 如果魔方已经初始化，重新生成模型
+    if (cubeInstance && cubeInstance.updatePieceSize) {
+      cubeInstance.updatePieceSize(size)
+    }
+  }
+
+  function setCustomPieceSize(size) {
+    config.customPieceSize = size
+    // 如果魔方已经初始化，重新生成位置和模型
+    if (cubeInstance && cubeInstance.regenerateModel) {
+      cubeInstance.regenerateModel(size)
+    }
+  }
+
+  function setPieceCornerRadius(radius) {
+    config.pieceCornerRadius = radius
+    // 如果魔方已经初始化，更新角半径
+    if (cubeInstance && cubeInstance.updatePieceCornerRadius) {
+      cubeInstance.updatePieceCornerRadius(radius)
+    }
+  }
+
+  function setEdgeCornerRoundness(roundness) {
+    config.edgeCornerRoundness = roundness
+    // 如果魔方已经初始化，更新边缘圆润度
+    if (cubeInstance && cubeInstance.updateEdgeCornerRoundness) {
+      cubeInstance.updateEdgeCornerRoundness(roundness)
+    }
+  }
+
+  function setEdgeScale(scale) {
+    config.edgeScale = scale
+    // 如果魔方已经初始化，更新边缘缩放
+    if (cubeInstance && cubeInstance.updateEdgeScale) {
+      cubeInstance.updateEdgeScale(scale)
+    }
+  }
+
   function getAvailableCubeTypes() {
     return ['cube3', 'cube2']
   }
@@ -135,6 +180,11 @@ export const useCubeStore = defineStore("cube", () => {
     setScramble,
     scrambleCube,
     setCubeType,
+    setPieceSize,
+    setCustomPieceSize,
+    setPieceCornerRadius,
+    setEdgeCornerRoundness,
+    setEdgeScale,
     getAvailableCubeTypes,
     solve,
 

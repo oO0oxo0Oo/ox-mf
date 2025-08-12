@@ -1,9 +1,11 @@
 <template>
   <div class="app">
-    <ControlsDemo />
-    <RotationMenu />
+    <!-- <ControlsDemo /> -->
+    <!-- <RotationMenu /> -->
     <!-- <TimelineDemo /> -->
-    <!-- <Begin /> -->
+    <Begin />
+    <!-- <CubeDemo /> -->
+
   </div>
 </template>
 
@@ -11,6 +13,7 @@
 import ControlsDemo from './test/ControlsDemo.vue'
 import RotationMenu from './components/RotationMenu.vue'
 import TimelineDemo from './test/TimelineDemo.vue';
+import CubeDemo from './test/CubeDemo.vue';
 import Begin from './components/Begin.vue';
 </script>
 
@@ -23,10 +26,11 @@ import Begin from './components/Begin.vue';
 
 body {
   font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-  background: #f5f5f5;
+  background: transparent;
 }
 
 .app {
   min-height: 100vh;
+  background: transparent;
 }
 </style> 

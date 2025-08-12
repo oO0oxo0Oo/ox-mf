@@ -49,6 +49,22 @@
         />
         <button @click="updateOpacity(0.9)">重置</button>
       </div>
+      <div class="gap-controller" style="top: 200px;">
+        <button @click="startAnimation">开始</button>
+        <button @click="pauseAnimation">暂停</button>
+        <button @click="stopAnimation">停止</button>
+        <button @click="resetAnimation">重置</button>
+        <button @click="toggleLoop" :style="{ background: animationStore.getTimelineInfo().isLooping ? '#4CAF50' : '#666' }">
+          {{ animationStore.getTimelineInfo().isLooping ? '循环开启' : '循环关闭' }}
+        </button>
+      </div>
+      
+      <!-- 时间线状态显示 -->
+      <div class="gap-controller" style="top: 260px; flex-direction: column; align-items: flex-start;">
+        <div>动画状态: {{ animationStore.getTimelineInfo().isPlaying ? '播放中' : '已停止' }}</div>
+        <div>当前动画: {{ animationStore.getTimelineInfo().currentItem?.name || '无' }}</div>
+        <div>进度: {{ Math.round(animationStore.getTimelineInfo().progress * 100) }}%</div>
+      </div>
     </div>
   </template>
   
@@ -66,12 +82,48 @@
   
   // 导入统一的动画系统
   import { useAnimation } from '../composable/useAnimation.js'
+  import { useTimeline } from '../composable/useTimeline.js'
+  import { TimelineAnimationManager } from '../animations/timelineAnimations.js'
+  import { useAnimationStore } from '../stores/animation.js'
   
   // ===== Vue 响应式数据 =====
   const container = ref(null)                    // DOM容器引用
   const currentPatternName = ref('Stardust Grid') // 当前模式名称
   const patternNameOpacity = ref(0)              // 模式名称透明度
   
+  // ===== 时间线动画系统 =====
+  const timeline = useTimeline()
+  const animationStore = useAnimationStore()
+
+  // ===== 本地状态变量（保留原有定义） =====
+  const gapSizeMultiplier = ref(0.0)  // 间隙倍数，从0开始
+  const cubeSizeMultiplier = ref(60.0)  // 大正方体边长倍数
+  const opacityMultiplier = ref(0.9)  // 粒子透明度倍数
+  
+  // ===== 同步store状态的函数 =====
+  
+  /**
+   * 同步store中的状态到本地变量
+   */
+  function syncStoreState() {
+    gapSizeMultiplier.value = animationStore.gapSizeMultiplier
+    cubeSizeMultiplier.value = animationStore.cubeSizeMultiplier
+    opacityMultiplier.value = animationStore.opacityMultiplier
+  }
+  
+  /**
+   * 监听store状态变化并同步到本地
+   */
+  function watchStoreChanges() {
+    // 监听store中的状态变化
+    animationStore.$subscribe((mutation, state) => {
+      // 当store中的值发生变化时，同步到本地变量
+      if (mutation.type === 'direct') {
+        syncStoreState()
+      }
+    })
+  }
+
   // ===== Three.js 核心变量 =====
   let scene, camera, renderer, particles  // 场景、相机、渲染器、粒子系统（移除stars）
   let composer                                   // 后处理效果组合器
@@ -101,10 +153,6 @@
   const particleCount = 25000      // 主粒子数量 - 影响性能和视觉效果
   const starCount = 6000           // 背景星空数量 - 影响背景密度
   const patternNames = ["Stardust Grid"]  // 模式名称数组（当前只有一个模式）
-  
-  let gapSizeMultiplier = 4.0  // 间隙倍数
-  let cubeSizeMultiplier = 60.0  // 大正方体边长倍数
-  let opacityMultiplier = 0.9  // 粒子透明度倍数
 
   // 在变量声明部分添加
   // 修改createGrid函数，让间隙独立于立方体边长
@@ -113,7 +161,7 @@
     const sideLength = Math.ceil(Math.cbrt(count))  // 25000 -> 29
     
     // 计算网格间距（总网格大小使用动态值）
-    const spacing = cubeSizeMultiplier / sideLength
+    const spacing = cubeSizeMultiplier.value / sideLength
     
     // 计算网格中心偏移量，使网格中心对齐到原点
     const halfGrid = (sideLength - 1) * spacing / 2
@@ -125,7 +173,7 @@
     
     // 魔方效果：将29x29x29的网格分成27个小块
     const cubeSize = Math.ceil(sideLength / 3)  // 每个小块的边长 = 10 (29/3向上取整)
-    const gapSize = gapSizeMultiplier  // 使用固定的间隙大小，不受spacing影响
+    const gapSize = Math.max(0, gapSizeMultiplier.value)  // 使用固定的间隙大小，不受spacing影响，确保不小于0
     
     // 计算当前粒子属于哪个小块 (0-26)
     const cubeZ = Math.floor(iz / cubeSize)  // 小块在Z方向的位置 (0,1,2)
@@ -228,6 +276,9 @@
     geometry.setAttribute('index', new THREE.BufferAttribute(indices, 1))        // 索引属性
     geometry.setAttribute('particleType', new THREE.BufferAttribute(particleTypes, 1))  // 类型属性
     geometry.userData.currentColors = new Float32Array(colors)  // 存储当前颜色数据（用于后续更新）
+    
+    // 计算几何体的边界框，用于动态平面检测
+    geometry.computeBoundingBox()
   
     // 创建粒子着色器材质
     const material = new THREE.ShaderMaterial({
@@ -235,7 +286,7 @@
       uniforms: {
         time: { value: 0 },                                    // 时间变量（用于动画）
         mousePos: { value: new THREE.Vector3(10000, 10000, 0) }, // 鼠标位置（初始值远离屏幕）
-        opacity: { value: opacityMultiplier }                  // 添加透明度统一变量
+        opacity: { value: opacityMultiplier.value }                  // 添加透明度统一变量
       },
              // 顶点着色器 - 处理粒子的位置、动画和交互
        vertexShader: `
@@ -498,7 +549,7 @@
    * @param {number} clientY - 鼠标Y坐标
    */
   function updateScreenMouse(clientX, clientY) {
-    screenMouse.x = (clientX / window.innerWidth) * 2 - 1
+    screenMouse.x = -(clientX / window.innerWidth) * 2 + 1  // X轴也取反，与Y轴保持一致
     screenMouse.y = -(clientY / window.innerHeight) * 2 + 1
   }
   
@@ -604,11 +655,37 @@
       camera.updateMatrixWorld()  // 更新相机矩阵（确保射线投射正确）
       const raycaster = new THREE.Raycaster()  // 创建射线投射器
       raycaster.setFromCamera(screenMouse, camera)  // 从相机发射射线到鼠标位置
-      const plane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0)  // 创建Z=0平面
-      raycaster.ray.intersectPlane(plane, worldMouse)               // 计算射线与平面的交点（鼠标在3D空间中的位置）
-      particles.material.uniforms.mousePos.value.copy(worldMouse)   // 传递鼠标位置给粒子着色器
       
-      // 只有一个模式，不需要过渡动画处理
+      // 动态平面检测：根据粒子系统的实际位置和相机方向设置平面
+      // 获取粒子系统的中心位置
+      const particleCenter = new THREE.Vector3()
+      particles.geometry.boundingBox?.getCenter(particleCenter)
+      
+      // 如果没有边界框，使用粒子系统的位置
+      if (!particleCenter.x && !particleCenter.y && !particleCenter.z) {
+        particleCenter.copy(particles.position)
+      }
+      
+      // 根据相机方向动态调整平面
+      const cameraDirection = new THREE.Vector3()
+      camera.getWorldDirection(cameraDirection)
+      
+      // 创建垂直于相机方向的平面，通过粒子系统中心
+      const planeNormal = cameraDirection.clone().normalize()
+      const planeDistance = -planeNormal.dot(particleCenter)
+      
+      const dynamicPlane = new THREE.Plane(planeNormal, planeDistance)
+      
+      // 计算射线与动态平面的交点
+      if (raycaster.ray.intersectPlane(dynamicPlane, worldMouse)) {
+        particles.material.uniforms.mousePos.value.copy(worldMouse)
+      } else {
+        // 如果射线与平面不相交，使用备用方法
+        // 创建一个与Z轴平行的平面，通过粒子系统中心
+        const fallbackPlane = new THREE.Plane(new THREE.Vector3(0, 0, 1), -particleCenter.z)
+        raycaster.ray.intersectPlane(fallbackPlane, worldMouse)
+        particles.material.uniforms.mousePos.value.copy(worldMouse)
+      }
     }
     
     // ===== 手动旋转相机控制 =====
@@ -636,6 +713,12 @@
     await nextTick()
     init()
     
+    // 初始化store中的时间线
+    animationStore.setTimeline(timeline)
+    
+    // 开始监听store状态变化
+    watchStoreChanges()
+    
     // 添加事件监听器
     window.addEventListener('resize', onWindowResize)
     window.addEventListener('mousemove', onMouseMove)
@@ -646,8 +729,16 @@
      window.addEventListener('touchmove', onTouchMove, { passive: false })
      window.addEventListener('touchend', onTouchEnd, { passive: false })
      
+     // 监听来自CubeDemo的开始动画事件
+     window.addEventListener('startBeginAnimation', handleStartAnimation)
+     
      // 开始动画
      startAnim()
+     
+     // 进入页面后立即执行间隙初始化动画
+     setTimeout(() => {
+       startGapInitializationAnimation()
+     }, 100) // 延迟100ms确保场景完全初始化
   })
   
   onUnmounted(() => {
@@ -661,6 +752,9 @@
     window.removeEventListener('touchmove', onTouchMove)
     window.removeEventListener('touchend', onTouchEnd)
     
+    // 移除开始动画事件监听器
+    window.removeEventListener('startBeginAnimation', handleStartAnimation)
+    
          // 停止动画
      stopAnim()
      
@@ -673,41 +767,289 @@
      }
   })
 
+  // 处理来自CubeDemo的开始动画事件
+  function handleStartAnimation() {
+    console.log('Begin组件收到开始动画事件')
+    startAnimation()
+    
+    // 通知CubeDemo动画已开始
+    window.dispatchEvent(new CustomEvent('beginAnimationStarted'))
+  }
+
+  // ===== 新的动画控制函数 - 调用store中的方法 =====
+  
+  /**
+   * 更新粒子位置（避免重新创建粒子系统导致的闪烁）
+   * @param {number} newGapSize - 新的间隙大小
+   */
+  function updateParticlePositions(newGapSize) {
+    if (!particles || !particles.geometry) return
+    
+    // 获取位置属性
+    const positionAttribute = particles.geometry.getAttribute('position')
+    if (!positionAttribute) return
+    
+    const positions = positionAttribute.array
+    const sideLength = Math.ceil(Math.cbrt(particleCount))
+    const spacing = cubeSizeMultiplier.value / sideLength
+    const cubeSize = Math.ceil(sideLength / 3)
+    
+    // 更新每个粒子的位置
+    for (let i = 0; i < particleCount; i++) {
+      const iz = Math.floor(i / (sideLength * sideLength))
+      const iy = Math.floor((i % (sideLength * sideLength)) / sideLength)
+      const ix = i % sideLength
+      
+      // 计算当前粒子属于哪个小块
+      const cubeZ = Math.floor(iz / cubeSize)
+      const cubeY = Math.floor(iy / cubeSize)
+      const cubeX = Math.floor(ix / cubeSize)
+      
+      // 计算粒子在小块内的相对位置
+      const localZ = iz % cubeSize
+      const localY = iy % cubeSize
+      const localX = ix % cubeSize
+      
+      // 计算小块的中心位置
+      const cubeCenterX = (cubeX - 1) * (cubeSize * spacing + newGapSize)
+      const cubeCenterY = (cubeY - 1) * (cubeSize * spacing + newGapSize)
+      const cubeCenterZ = (cubeZ - 1) * (cubeSize * spacing + newGapSize)
+      
+      // 计算粒子在小块内的相对位置
+      const localOffsetX = (localX - (cubeSize - 1) / 2) * spacing
+      const localOffsetY = (localY - (cubeSize - 1) / 2) * spacing
+      const localOffsetZ = (localZ - (cubeSize - 1) / 2) * spacing
+      
+      // 最终位置
+      const finalX = cubeCenterX + localOffsetX
+      const finalY = cubeCenterY + localOffsetY
+      const finalZ = cubeCenterZ + localOffsetZ
+      
+      // 更新位置数组
+      positions[i * 3] = finalX
+      positions[i * 3 + 1] = finalY
+      positions[i * 3 + 2] = finalZ
+    }
+    
+    // 标记位置属性需要更新
+    positionAttribute.needsUpdate = true
+  }
+
+  /**
+   * 开始间隙初始化动画 - 进入页面时立即执行
+   */
+  function startGapInitializationAnimation() {
+    console.log('开始间隙初始化动画')
+    
+    // 检查场景是否已初始化
+    if (!scene || !camera || !particles) {
+      console.warn('场景未初始化，无法开始间隙初始化动画')
+      return
+    }
+    
+    // 设置store中的时间线
+    animationStore.setTimeline(timeline)
+    
+    // 创建动画管理器实例并设置到store中
+    const animationManager = new TimelineAnimationManager(
+      timeline, 
+      scene, 
+      camera, 
+      particles, 
+      baseRadius, 
+      initialRotationX, 
+      initialRotationY
+    )
+    
+    // 设置到store中
+    animationStore.setAnimationManager(animationManager)
+    
+    // 监听粒子更新事件
+    animationStore.on('particleUpdate', (data) => {
+      console.log('间隙初始化动画收到粒子更新事件:', data)
+      // 更新本地变量
+      if (data.gapSizeMultiplier !== undefined) {
+        gapSizeMultiplier.value = data.gapSizeMultiplier
+      }
+      
+      // 不重新创建粒子系统，只更新现有粒子的位置
+      // 这样可以避免闪烁
+      if (particles && particles.geometry) {
+        updateParticlePositions(data.gapSizeMultiplier || 0)
+      }
+    })
+    
+    // 监听动画完成事件，保持动画结束时的最终值
+    animationStore.on('animationComplete', (data) => {
+      console.log('间隙初始化动画完成:', data)
+      // 保持动画结束时的最终间隙值（应该是8）
+      // 不要强制覆盖动画结果
+      console.log('动画完成后的间隙值:', gapSizeMultiplier.value)
+      
+      // 重置时间线，为后续的点击开始按钮动画做准备
+      if (timeline) {
+        timeline.reset()
+      }
+    })
+    
+    // 调用间隙初始化动画方法
+    if (animationManager && animationManager.setupCubeTimeline) {
+      console.log('设置间隙初始化动画时间线')
+      animationManager.setupCubeTimeline()
+      // 启动时间线动画
+      if (timeline) {
+        console.log('启动时间线动画')
+        timeline.play()
+      } else {
+        console.warn('时间线未初始化')
+      }
+    } else {
+      console.warn('动画管理器或setupCubeTimeline方法不存在')
+    }
+  }
+  
+  /**
+   * 开始动画 - 调用store中的动画方法
+   */
+  function startAnimation() {
+    console.log('开始动画函数被调用')
+    
+    // 检查场景是否已初始化
+    if (!scene || !camera || !particles) {
+      console.warn('场景未初始化，无法开始动画')
+      return
+    }
+    
+    console.log('场景已初始化，开始设置动画')
+    
+    // 设置store中的时间线和动画管理器
+    animationStore.setTimeline(timeline)
+    console.log('时间线已设置到store中')
+    
+    // 创建动画管理器实例并设置到store中
+    const animationManager = new TimelineAnimationManager(
+      timeline, 
+      scene, 
+      camera, 
+      particles, 
+      baseRadius, 
+      initialRotationX, 
+      initialRotationY
+    )
+    console.log('动画管理器已创建')
+    
+    // 设置到store中
+    animationStore.setAnimationManager(animationManager)
+    console.log('动画管理器已设置到store中')
+    
+    // 监听store的粒子更新事件
+    animationStore.on('particleUpdate', (data) => {
+      console.log('收到粒子更新事件:', data)
+      // 更新本地变量
+      if (data.cubeSizeMultiplier !== undefined) {
+        cubeSizeMultiplier.value = data.cubeSizeMultiplier
+      }
+      if (data.gapSizeMultiplier !== undefined) {
+        gapSizeMultiplier.value = data.gapSizeMultiplier
+      }
+      
+      // 更新粒子位置以应用新的参数
+      if (particles && particles.geometry) {
+        if (data.gapSizeMultiplier !== undefined) {
+          updateParticlePositions(data.gapSizeMultiplier)
+        }
+        if (data.cubeSizeMultiplier !== undefined) {
+          // 对于立方体大小的变化，我们可能需要重新创建粒子系统
+          // 但为了减少闪烁，我们可以尝试只更新位置
+          updateParticlePositions(data.gapSizeMultiplier || gapSizeMultiplier.value)
+        }
+      }
+    })
+    
+    // 监听动画完成事件
+    animationStore.on('animationComplete', (data) => {
+      console.log('动画完成:', data)
+      // 可以在这里添加动画完成后的逻辑
+    })
+    
+    // 调用store中的开始动画方法
+    console.log('准备调用store中的startCubeAnimation方法')
+    animationStore.startCubeAnimation()
+    console.log('store中的startCubeAnimation方法调用完成')
+  }
+  
+  /**
+   * 暂停动画 - 调用store中的暂停方法
+   */
+  function pauseAnimation() {
+    animationStore.pauseAnimation()
+  }
+  
+  /**
+   * 停止动画 - 调用store中的停止方法
+   */
+  function stopAnimation() {
+    animationStore.stopAnimation()
+  }
+  
+  /**
+   * 重置动画 - 调用store中的重置方法
+   */
+  function resetAnimation() {
+    animationStore.resetAnimation()
+  }
+
   // 添加更新函数
   function updateGapSize(newValue) {
-    gapSizeMultiplier = newValue
-    // 重新创建粒子系统
-    if (particles) {
-      scene.remove(particles)
-      particles.geometry.dispose()
-      particles.material.dispose()
+    gapSizeMultiplier.value = newValue
+    
+    // 同时更新store中的值
+    animationStore.updateGapSize(newValue)
+    
+    // 更新粒子位置而不是重新创建粒子系统
+    if (particles && particles.geometry) {
+      updateParticlePositions(newValue)
     }
-    particles = createParticleSystem()
-    scene.add(particles)
   }
 
   // 添加大正方体边长更新函数
   function updateCubeSize(newValue) {
-    cubeSizeMultiplier = newValue
-    // 重新创建粒子系统
-    if (particles) {
-      scene.remove(particles)
-      particles.geometry.dispose()
-      particles.material.dispose()
+    cubeSizeMultiplier.value = newValue
+    
+    // 同时更新store中的值
+    animationStore.updateCubeSize(newValue)
+    
+    // 更新粒子位置而不是重新创建粒子系统
+    if (particles && particles.geometry) {
+      updateParticlePositions(gapSizeMultiplier.value)
     }
-    particles = createParticleSystem()
-    scene.add(particles)
   }
 
   // 添加透明度更新函数
   function updateOpacity(newValue) {
-    opacityMultiplier = newValue
+    opacityMultiplier.value = newValue
+    
+    // 同时更新store中的值
+    animationStore.updateOpacity(newValue)
+    
     // 更新材质中的透明度统一变量
     if (particles && particles.material) {
       particles.material.uniforms.opacity.value = newValue
     }
   }
 
+  // 移除本地的setupTimeline函数，现在完全使用全局的TimelineAnimationManager
+  
+  // 切换循环播放
+  function toggleLoop() {
+    // 调用store中的循环切换方法
+    animationStore.toggleLoop()
+    
+    // 保留原有的本地逻辑（如果需要的话）
+    const currentLoopState = timeline.getInfo().isLooping
+    console.log(`循环播放已${!currentLoopState ? '开启' : '关闭'}`)
+  }
+  
   // 移除onKeyDown函数
   </script>
   

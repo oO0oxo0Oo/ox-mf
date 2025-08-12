@@ -2,10 +2,14 @@ import { RoundedBoxGeometry, RoundedPlaneGeometry } from "../geometry/Geometry";
 import * as THREE from "three";
 import { useScramble } from "../composable/useScramble.js";
 import { useRotationQueueStore } from "../stores/rotationQueue.js";
+import { CubeInterface } from "./CubeInterface.js";
 
 export function useCube(scene) {
-	// 几何配置 - 调整为二阶魔方
-	const geometry = {
+	// 继承通用魔方接口
+	const cube = new CubeInterface(scene);
+	
+	// 覆盖几何配置 - 调整为二阶魔方
+	cube.geometry = {
 		pieceSize: 1 / 2, // 二阶魔方块大小，每个块大小为1
 		pieceCornerRadius: 0.12,
 		edgeCornerRoundness: 0.15,
@@ -13,18 +17,11 @@ export function useCube(scene) {
 		edgeDepth: 0.01,
 	};
 
-	const pieces = [];
-	const edges = [];
-	const positions = [];
+	// 获取引用
+	const { pieces, edges, positions, holder, object, animator, group } = cube;
 
-	// Three.js对象引用 - 使用 const 声明，确保引用正确
-	const holder = new THREE.Object3D();
-	const object = new THREE.Object3D();
+	// 设置对象名称
 	object.name = "cubeObject";
-	const animator = new THREE.Object3D();
-
-	// 层操作相关
-	const group = new THREE.Object3D(); // 用于层旋转的临时组
 	group.name = "layerGroup";
 
 	// 打乱相关状态
@@ -106,14 +103,14 @@ export function useCube(scene) {
 		const mainMaterial = new THREE.MeshLambertMaterial({ color: 0x333333 });
 
 		const pieceMesh = new THREE.Mesh(
-			new RoundedBoxGeometry(pieceSize, geometry.pieceCornerRadius, 2),
+			new RoundedBoxGeometry(pieceSize, cube.geometry.pieceCornerRadius, 2),
 			mainMaterial.clone()
 		);
 
 		const edgeGeometry = RoundedPlaneGeometry(
 			pieceSize,
-			geometry.edgeCornerRoundness,
-			geometry.edgeDepth
+			cube.geometry.edgeCornerRoundness,
+			cube.geometry.edgeDepth
 		);
 
 		positions.forEach((position, index) => {
@@ -151,9 +148,9 @@ export function useCube(scene) {
 				);
 
 				edge.scale.set(
-					geometry.edgeScale,
-					geometry.edgeScale,
-					geometry.edgeScale
+					cube.geometry.edgeScale,
+					cube.geometry.edgeScale,
+					cube.geometry.edgeScale
 				);
 
 				edge.name = name;
@@ -324,7 +321,7 @@ export function useCube(scene) {
 	function scrambleCube() {
 		const queue = useScramble();
 		const rotationQueueStore = useRotationQueueStore();
-		isScrambling = true;
+		cube.isScrambling = true;
 		rotationQueueStore.rotationQueue(queue);
 	}
 
@@ -332,14 +329,14 @@ export function useCube(scene) {
 
 	// 获取打乱状态
 	function getScrambleState() {
-		return isScrambling;
+		return cube.isScrambling;
 	}
 
 	// 停止打乱
 	function stopScramble() {
-		isScrambling = false;
-		if (rotationTween) {
-			rotationTween.stop();
+		cube.isScrambling = false;
+		if (cube.rotationTween) {
+			cube.rotationTween.stop();
 		}
 		const rotationQueueStore = useRotationQueueStore();
 		rotationQueueStore.clearRotationQueue();
@@ -347,7 +344,7 @@ export function useCube(scene) {
 
 	return {
 		// 状态
-		geometry,
+		geometry: cube.geometry,
 		pieces,
 		edges,
 		positions,
@@ -378,5 +375,18 @@ export function useCube(scene) {
 		scrambleCube,
 		getScrambleState,
 		stopScramble,
+
+		// 贴片可见性控制 - 使用继承的方法
+		hideEdges: cube.hideEdges.bind(cube),
+		showEdges: cube.showEdges.bind(cube),
+		toggleEdges: cube.toggleEdges.bind(cube),
+		getEdgesVisibility: cube.getEdgesVisibility.bind(cube),
+
+		// 边长控制 - 使用继承的方法
+		updatePieceSize: cube.updatePieceSize.bind(cube),
+		regenerateModel: cube.regenerateModel.bind(cube),
+		updatePieceCornerRadius: cube.updatePieceCornerRadius.bind(cube),
+		updateEdgeCornerRoundness: cube.updateEdgeCornerRoundness.bind(cube),
+		updateEdgeScale: cube.updateEdgeScale.bind(cube),
 	};
 }
