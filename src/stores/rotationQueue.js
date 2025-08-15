@@ -2,10 +2,11 @@ import { defineStore } from "pinia"
 import * as THREE from 'three';
 import { useTween } from '../composable/useTween';
 import { Easing } from "../composable/Easing"
+import { animationEngine } from '../animations/animationEngine';
 
 export const useRotationQueueStore = defineStore("rotationQueue", () => {
   // 配置
-  const DURATION = 500;
+  const DURATION = 220;
   const faceConfig = {
     U: { axis: "y", value: 1, angle: Math.PI / 2 },
     D: { axis: "y", value: -1, angle: Math.PI / 2 },
@@ -27,6 +28,9 @@ export const useRotationQueueStore = defineStore("rotationQueue", () => {
   let isRotating = false;
   let currentTween = null;
   let cubeInstance = null;
+  
+  // 动画状态恢复相关
+  let currentRotationState = null; // 保存当前旋转状态
 
   // 设置魔方实例
   function setCubeInstance(instance) {
@@ -104,7 +108,6 @@ export const useRotationQueueStore = defineStore("rotationQueue", () => {
     
     // 将旋转操作添加到队列
     animationQueue.push({ face, direction });
-    console.log(`添加旋转到队列: ${face}${direction > 0 ? '' : 'p'}, 队列长度: ${animationQueue.length}`);
     
     // 如果当前没有动画在运行，开始处理队列
     if (!isRotating) {
@@ -115,13 +118,11 @@ export const useRotationQueueStore = defineStore("rotationQueue", () => {
   function processQueue() {
     if (animationQueue.length === 0) {
       isRotating = false;
-      console.log('队列处理完成');
       return;
     }
 
     isRotating = true;
     let { face, direction } = animationQueue.shift();
-    console.log(`执行旋转: ${face}${direction > 0 ? '' : 'p'}, 剩余队列: ${animationQueue.length}`);
 
     let layer = cubeInstance.getLayerByCurrentOrientation(face[0]);
     
@@ -140,6 +141,15 @@ export const useRotationQueueStore = defineStore("rotationQueue", () => {
     cubeInstance.selectLayer(layer);
     const layerGroup = cubeInstance.getLayerGroup();
 
+    // 保存当前旋转状态，用于动画恢复
+    currentRotationState = {
+      layer,
+      angle,
+      rotationAxis: rotationAxis.clone(),
+      layerGroup,
+      totalRotation: 0 // 累计旋转角度
+    };
+
     currentTween = useTween({
       easing: Easing.Sine.Out(),
       duration: DURATION,
@@ -150,16 +160,24 @@ export const useRotationQueueStore = defineStore("rotationQueue", () => {
         const inverseMatrix = new THREE.Matrix4().copy(layerGroup.matrixWorld).invert();
         localAxis.applyMatrix4(inverseMatrix).normalize();
         
-        layerGroup.rotateOnAxis(localAxis, tween.delta * angle);
-
+        const rotationDelta = tween.delta * angle;
+        layerGroup.rotateOnAxis(localAxis, rotationDelta);
+        
+        // 更新累计旋转角度
+        if (currentRotationState) {
+          currentRotationState.totalRotation += rotationDelta;
+          currentRotationState.progress = tween.progress;
+        }
       },
       onComplete: () => {
         cubeInstance.deselectLayer(layer);
         currentTween = null;
-        // 动画完成后，等待 DURATION 时间再处理下一个队列项
+        currentRotationState = null; // 清除旋转状态
+        
+        // 动画完成后，等待一小段时间再处理下一个队列项
         setTimeout(() => {
           processQueue();
-        }, DURATION);
+        }, DURATION); // 减少等待时间，提高响应性
       }
     });
   }
@@ -170,6 +188,56 @@ export const useRotationQueueStore = defineStore("rotationQueue", () => {
       currentTween.stop();
     }
     isRotating = false;
+    currentRotationState = null;
+  }
+
+  // 监听动画引擎状态，处理页面可见性变化
+  function setupAnimationStateListener() {
+    // 监听页面可见性变化
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) {
+        // 页面重新可见时，检查是否有被中断的旋转
+        setTimeout(() => handlePageVisible(), 50);
+      }
+    });
+
+    window.addEventListener('focus', () => {
+      setTimeout(() => handlePageVisible(), 50);
+    });
+
+    // 监听动画引擎的页面可见事件
+    window.addEventListener('pageVisible', () => {
+      setTimeout(() => handlePageVisible(), 100);
+    });
+  }
+
+  function handlePageVisible() {
+    // 如果有当前旋转状态且tween已停止，说明旋转被中断了
+    if (currentRotationState && (!currentTween || !currentTween.state)) {
+      // 计算剩余的旋转角度
+      const remainingAngle = currentRotationState.angle - currentRotationState.totalRotation;
+      
+      if (Math.abs(remainingAngle) > 0.01) { // 如果还有明显的剩余角度
+        // 立即完成当前旋转到目标位置
+        const localAxis = currentRotationState.rotationAxis.clone();
+        currentRotationState.layerGroup.updateMatrixWorld();
+        const inverseMatrix = new THREE.Matrix4().copy(currentRotationState.layerGroup.matrixWorld).invert();
+        localAxis.applyMatrix4(inverseMatrix).normalize();
+        
+        currentRotationState.layerGroup.rotateOnAxis(localAxis, remainingAngle);
+      }
+      
+      // 清理当前旋转状态
+      cubeInstance.deselectLayer(currentRotationState.layer);
+      currentRotationState = null;
+      currentTween = null;
+      isRotating = false;
+      
+      // 继续处理队列
+      setTimeout(() => {
+        processQueue();
+      }, 100);
+    }
   }
 
   // 便捷的旋转方法
@@ -257,10 +325,15 @@ export const useRotationQueueStore = defineStore("rotationQueue", () => {
     })
   }
 
+  // 初始化监听器
+  setupAnimationStateListener();
+
   return {
     // 状态
     isRotating: () => isRotating,
     queueLength: () => animationQueue.length,
+    hasCurrentRotation: () => currentRotationState !== null,
+    getAnimationEngineStatus: () => animationEngine.getStatus(),
     
     // 方法
     setCubeInstance,

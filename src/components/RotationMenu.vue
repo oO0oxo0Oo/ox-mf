@@ -11,10 +11,10 @@ const scramble = () => {
 	cubeStore.scrambleCube();
 }
 const solve = () =>{
-
 	console.log(cubeStore.solve(),"!!!!!!")
-
 }
+
+
 
 // 定义点击处理函数
 const handleRotate = (face, direction = 1) => {
@@ -42,6 +42,8 @@ const bottomRowButtons = [
 
 // 计算属性
 const queueLength = computed(() => rotationQueueStore.queueLength());
+const animationStatus = computed(() => rotationQueueStore.getAnimationEngineStatus());
+const hasCurrentRotation = computed(() => rotationQueueStore.hasCurrentRotation());
 </script>
 
 <template>
@@ -49,11 +51,22 @@ const queueLength = computed(() => rotationQueueStore.queueLength());
 		<!-- 标题 -->
 		<div class="menu-header">
 			<h3 class="menu-title">魔方控制</h3>
-			<div class="menu-status">
-				<span class="queue-info" v-if="queueLength > 0">
-					队列: {{ queueLength }}
-				</span>
-			</div>
+					<div class="menu-status">
+			<span class="queue-info" v-if="queueLength > 0">
+				队列: {{ queueLength }}
+			</span>
+			<span class="animation-status" :class="{ 
+				'status-running': animationStatus.isRunning,
+				'status-paused': animationStatus.isPaused,
+				'status-idle': !animationStatus.isRunning && !animationStatus.isPaused
+			}">
+				{{ animationStatus.isPaused ? '已暂停' : 
+				   animationStatus.isRunning ? '运行中' : '空闲' }}
+			</span>
+			<span class="rotation-status" v-if="hasCurrentRotation">
+				🔄 旋转中
+			</span>
+		</div>
 		</div>
 
 		<!-- 旋转按钮 - 上下两行布局 -->
@@ -151,6 +164,46 @@ const queueLength = computed(() => rotationQueueStore.queueLength());
 	color: rgba(255, 255, 255, 0.8);
 	font-size: 0.8rem;
 	font-weight: 500;
+}
+
+.animation-status {
+	color: rgba(255, 255, 255, 0.8);
+	font-size: 0.8rem;
+	font-weight: 500;
+	padding: 2px 8px;
+	border-radius: 12px;
+	background: rgba(255, 255, 255, 0.1);
+}
+
+.status-running {
+	background: rgba(0, 255, 0, 0.2);
+	color: #90EE90;
+}
+
+.status-paused {
+	background: rgba(255, 165, 0, 0.2);
+	color: #FFA500;
+}
+
+.status-idle {
+	background: rgba(128, 128, 128, 0.2);
+	color: rgba(255, 255, 255, 0.6);
+}
+
+.rotation-status {
+	color: #FFD700;
+	font-size: 0.8rem;
+	font-weight: 500;
+	animation: pulse 1.5s ease-in-out infinite alternate;
+}
+
+@keyframes pulse {
+	from {
+		opacity: 0.6;
+	}
+	to {
+		opacity: 1;
+	}
 }
 
 .rotation-container {
@@ -282,6 +335,8 @@ const queueLength = computed(() => rotationQueueStore.queueLength());
 	border-color: rgba(255, 107, 107, 0.6);
 	background: linear-gradient(145deg, rgba(255, 107, 107, 0.1), rgba(255, 107, 107, 0.05));
 }
+
+
 
 .btn-icon {
 	font-size: 1rem;
