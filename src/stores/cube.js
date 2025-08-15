@@ -161,6 +161,73 @@ export const useCubeStore = defineStore("cube", () => {
     return ['cube3', 'cube2']
   }
 
+  // ===== 新增：便利的参数获取方法 =====
+
+  /**
+   * 获取当前魔方的所有几何参数
+   */
+  function getCubeGeometry() {
+    return {
+      pieceSize: config.pieceSize,
+      customPieceSize: config.customPieceSize,
+      pieceCornerRadius: config.pieceCornerRadius,
+      edgeCornerRoundness: config.edgeCornerRoundness,
+      edgeScale: config.edgeScale
+    }
+  }
+
+  /**
+   * 批量更新魔方几何参数
+   */
+  function updateCubeGeometry(updates) {
+    let hasChanges = false
+    
+    if (updates.pieceSize !== undefined) {
+      setPieceSize(updates.pieceSize)
+      hasChanges = true
+    }
+    
+    if (updates.customPieceSize !== undefined) {
+      setCustomPieceSize(updates.customPieceSize)
+      hasChanges = true
+    }
+    
+    if (updates.pieceCornerRadius !== undefined) {
+      setPieceCornerRadius(updates.pieceCornerRadius)
+      hasChanges = true
+    }
+    
+    if (updates.edgeCornerRoundness !== undefined) {
+      setEdgeCornerRoundness(updates.edgeCornerRoundness)
+      hasChanges = true
+    }
+    
+    if (updates.edgeScale !== undefined) {
+      setEdgeScale(updates.edgeScale)
+      hasChanges = true
+    }
+    
+    if (hasChanges) {
+      console.log('魔方几何参数已批量更新:', updates)
+    }
+    
+    return hasChanges
+  }
+
+  /**
+   * 同步魔方实例的当前状态到配置
+   */
+  function syncFromInstance() {
+    if (cubeInstance && cubeInstance.geometry) {
+      const geometry = cubeInstance.geometry
+      config.pieceSize = geometry.pieceSize || config.pieceSize
+      config.pieceCornerRadius = geometry.pieceCornerRadius || config.pieceCornerRadius
+      config.edgeCornerRoundness = geometry.edgeCornerRoundness || config.edgeCornerRoundness
+      config.edgeScale = geometry.edgeScale || config.edgeScale
+      console.log('已从魔方实例同步配置')
+    }
+  }
+
   return {
     // 状态
     isInitialized,
@@ -187,7 +254,11 @@ export const useCubeStore = defineStore("cube", () => {
     setEdgeScale,
     getAvailableCubeTypes,
     solve,
-
+    
+    // 新增：几何参数管理方法
+    getCubeGeometry,
+    updateCubeGeometry,
+    syncFromInstance,
     
     // 获取实例
     getCubeInstance: () => cubeInstance

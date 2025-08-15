@@ -2,11 +2,10 @@ import { Easing } from '../composable/Easing.js'
 
 /**
  * 时间线动画管理器
- * 负责管理所有页面的动画序列
- * 使用事件驱动架构，发出动画事件而不是直接调用回调
+ * 负责管理粒子系统的动画序列
  */
 export class TimelineAnimationManager {
-  constructor(timeline, scene, camera, particles, baseRadius, initialRotationX, initialRotationY) {
+  constructor(timeline, scene, camera, particles, baseRadius, initialRotationX, initialRotationY, cubeInstance = null) {
     this.timeline = timeline
     this.scene = scene
     this.camera = camera
@@ -14,16 +13,10 @@ export class TimelineAnimationManager {
     this.baseRadius = baseRadius
     this.initialRotationX = initialRotationX
     this.initialRotationY = initialRotationY
-    
-    // 事件监听器数组
+    this.cubeInstance = cubeInstance
     this.eventListeners = {}
   }
 
-  /**
-   * 添加事件监听器
-   * @param {string} eventName - 事件名称
-   * @param {Function} listener - 监听器函数
-   */
   on(eventName, listener) {
     if (!this.eventListeners[eventName]) {
       this.eventListeners[eventName] = []
@@ -31,11 +24,6 @@ export class TimelineAnimationManager {
     this.eventListeners[eventName].push(listener)
   }
 
-  /**
-   * 移除事件监听器
-   * @param {string} eventName - 事件名称
-   * @param {Function} listener - 监听器函数
-   */
   off(eventName, listener) {
     if (this.eventListeners[eventName]) {
       const index = this.eventListeners[eventName].indexOf(listener)
@@ -45,11 +33,6 @@ export class TimelineAnimationManager {
     }
   }
 
-  /**
-   * 发出事件
-   * @param {string} eventName - 事件名称
-   * @param {any} data - 事件数据
-   */
   emit(eventName, data) {
     if (this.eventListeners[eventName]) {
       this.eventListeners[eventName].forEach(listener => {
@@ -61,150 +44,302 @@ export class TimelineAnimationManager {
       })
     }
   }
+  
+  setCubeInstance(cubeInstance) {
+    this.cubeInstance = cubeInstance
+  }
 
   /**
-   * 设置立方体动画时间线
-   * 现在使用事件驱动，不再需要onUpdate回调
+   * 设置初始化动画时间线 - 页面加载时的入场效果
    */
-  setupCubeTimeline() {
-    console.log('setupCubeTimeline被调用')
-    // 重置时间线
+  setupInitializationTimeline() {
     this.timeline.reset()
-    console.log('时间线已重置')
     
-    // 第一阶段：间隙从0-5 + 顺时针旋转800度，增加阻尼感变慢
     this.timeline.addCustom((progress) => {
-      // 使用弹性缓动函数增加阻尼感，开始时快，结束时慢
       const easedProgress = Easing.Elastic.Out(1.2, 0.3)(progress)
-      
-      // 间隙从0平滑过渡到5
-      const newGapSize = 0 + (5 - 0) * easedProgress
-      
-      // 立方体边长保持初始值60
+      const newGapSize = 5 * easedProgress
       const newCubeSize = 60
-      
-      // 顺时针旋转800度，增加阻尼感
-      const rotationAngle = (360 * Math.PI / 180) * easedProgress // 转换为弧度
+      const rotationAngle = (360 * Math.PI / 180) * easedProgress
       const currentRotationX = this.initialRotationX + rotationAngle
       
-      // 粒子系统保持初始缩放，添加旋转效果
       if (this.particles && this.particles.material) {
         this.particles.scale.setScalar(1.0)
-        // 添加粒子系统的旋转效果
-        this.particles.rotation.y = rotationAngle * 0.5 // 粒子系统也跟随旋转
+        this.particles.rotation.y = rotationAngle * 0.5
       }
       
-      // 发出动画更新事件
       this.emit('animationUpdate', {
         cubeSizeMultiplier: newCubeSize,
         gapSizeMultiplier: newGapSize,
         currentRotationX: currentRotationX,
-        phase: '间隙初始化动画第一阶段',
+        phase: '页面初始化入场动画',
         progress: progress
       })
     }, {
-      duration: 2000, // 800ms的第一阶段动画，增加阻尼感需要更多时间
-      name: '间隙初始化动画第一阶段',
-      easing: Easing.Elastic.Out(1.2, 0.3) // 弹性缓动，增加阻尼感
+      duration: 2000,
+      name: '页面初始化入场动画',
+      easing: Easing.Elastic.Out(1.2, 0.3)
     })
     
-    console.log('间隙初始化动画两个阶段已添加到时间线')
+    // 启动动画播放
+    this.timeline.play()
   }
 
   /**
-   * 设置立方体动画时间线（用于点击开始按钮后的动画）
+   * 设置用户触发动画时间线 - 点击开始按钮后的动画序列
    */
-  setupCubeAnimationTimeline() {
-    // 重置时间线
+  setupUserTriggeredTimeline() {
     this.timeline.reset()
     
-    // 第一阶段：急速拓展到1000，相机位置不变
+    // 第一阶段：急速拓展到1000
     this.timeline.addCustom((progress) => {
-      // 使用缓动函数让动画开始时急速，然后缓慢下来
-      const easedProgress = Easing.Power.Out(3)(progress) // 开始时快，结束时慢
-      
-      // 立方体边长从60急速拓展到1000
+      const easedProgress = Easing.Power.Out(3)(progress)
       const newCubeSize = 60 + (800 - 60) * easedProgress
-      
-      // 间隙从8平滑过渡到12，与立方体变化协调
       const newGapSize = 8 + (12 - 8) * easedProgress
       
-      // 粒子系统平滑缩放，避免突变
       if (this.particles && this.particles.material) {
         const smoothScale = 1 + (1.2 - 1) * easedProgress
         this.particles.scale.setScalar(smoothScale)
       }
       
-      // 相机位置保持不变（移除所有相机运动代码）
-      // 相机保持在初始位置，不进行任何移动
-      
-      // 发出动画更新事件
       this.emit('animationUpdate', {
         cubeSizeMultiplier: newCubeSize,
         gapSizeMultiplier: newGapSize,
-        currentRotationX: this.initialRotationX, // 保持初始旋转角度
+        currentRotationX: this.initialRotationX,
         phase: '急速拓展到1000',
         progress: progress
       })
     }, {
       duration: 800,
       name: '急速拓展到1000',
-      easing: Easing.Power.Out(3) // 开始时快，结束时慢
+      easing: Easing.Power.Out(3)
+    })
+
+    // 第二阶段：最终调整
+    this.timeline.addCustom((progress) => {
+      const easedProgress = Easing.Power.InOut(2)(progress)
+      const newCubeSize = 800 + (40 - 800) * easedProgress
+      const newGapSize = 12 + (0 - 12) * easedProgress
+      
+      const finalRotationX = this.initialRotationX + Math.PI * 0.3
+      const finalRotationY = this.initialRotationY + Math.PI * 0.2
+      const currentRotationX = this.initialRotationX + (finalRotationX - this.initialRotationX) * easedProgress
+      const currentRotationY = this.initialRotationY + (finalRotationY - this.initialRotationY) * easedProgress
+      
+      if (this.camera) {
+        const cameraX = Math.sin(currentRotationX) * Math.cos(currentRotationY) * this.baseRadius
+        const cameraY = Math.sin(currentRotationY) * this.baseRadius
+        const cameraZ = Math.cos(currentRotationX) * Math.cos(currentRotationY) * this.baseRadius
+        
+        this.camera.position.set(cameraX, cameraY, cameraZ)
+        this.camera.lookAt(0, 0, 0)
+      }
+      
+      if (this.particles && this.particles.material) {
+        const finalParticleScale = 0.8 + (1.0 - 0.8) * easedProgress
+        this.particles.scale.setScalar(finalParticleScale)
+      }
+      
+      this.emit('animationUpdate', {
+        cubeSizeMultiplier: newCubeSize,
+        gapSizeMultiplier: newGapSize,
+        currentRotationX: currentRotationX,
+        currentRotationY: currentRotationY,
+        phase: '最终调整',
+        progress: progress
+      })
+    }, {
+      duration: 500,
+      name: '最终调整',
+      easing: Easing.Power.InOut(2)
     })
     
+    this.timeline.play()
+    
+    this.timeline.on('complete', () => {
+      this.emit('animationStep', { 
+        name: '准备启动魔方出场动画', 
+        index: -1 
+      })
+      // 触发动画完成事件
+      this.emit('animationComplete', { 
+        phase: 'userTriggeredComplete',
+        isUserTriggered: true
+      })
+    })
+    
+    this.timeline.on('step', (item, index) => {
+      this.emit('animationStep', { name: item.name, index: index })
+    })
+  }
+
+  /**
+   * 设置魔方出场动画时间线（集成到统一系统）
+   */
+  setupCubeEntranceTimeline(cubeInstance) {
+    if (!cubeInstance) {
+      console.error('魔方实例未提供，无法启动出场动画')
+      this.emit('animationError', { error: '魔方实例未提供' })
+      return
+    }
+
+    this.timeline.reset()
+    
+    // 设置魔方初始状态
     try {
-      this.timeline.play()
-      console.log('立方体动画时间线开始播放')
-      
-      // 添加动画完成回调
-      this.timeline.on('complete', () => {
-        console.log('立方体动画时间线播放完成')
-        // 发出动画完成事件
-        this.emit('animationComplete', { phase: 'complete' })
-      })
-      
-      // 添加动画步骤回调
-      this.timeline.on('step', (item, index) => {
-        console.log(`开始播放动画: ${item.name}`)
-        // 发出动画步骤事件
-        this.emit('animationStep', { name: item.name, index: index })
-      })
-      
+      cubeInstance.regenerateModel(0.05)
+      cubeInstance.updatePieceCornerRadius(0.5)
+      cubeInstance.updateMainColor(0x41aac8) // 粒子蓝色
+      cubeInstance.hideEdges() // 初始隐藏所有贴面
     } catch (error) {
-      console.error('播放立方体动画时间线时出错:', error)
-      // 发出错误事件
+      console.error('设置魔方初始状态失败:', error)
       this.emit('animationError', { error: error.message })
+      return
     }
+
+    // 魔方出场动画：边长增长、角半径调整、颜色渐变和贴面显示
+    this.timeline.addCustom((progress) => {
+      // 使用弹性缓动函数
+      const easedProgress = this.elasticEasing(progress)
+      
+      // 立方体边长从0.05平滑过渡到默认尺寸
+      const startSize = 0.05
+      const defaultPieceSize = 1/3
+      const newSize = startSize + (defaultPieceSize - startSize) * easedProgress
+
+      // 角半径从0.5平滑过渡到默认状态
+      const startRadius = 0.5
+      const defaultCornerRadius = 0.12
+      const newRadius = startRadius + (defaultCornerRadius - startRadius) * easedProgress
+
+      // 颜色渐变：从粒子蓝到深色
+      const colorTransitionDuration = 0.6
+      const colorProgress = Math.min(progress / colorTransitionDuration, 1)
+      const easedColorProgress = this.smoothEasing(colorProgress)
+      const newColor = this.interpolateColor(0x41aac8, 0x1a1a2e, easedColorProgress)
+
+      // 贴面透明度控制：在动画的中后段（40%后）开始显示贴面，更早展示颜色
+      const stickerStartThreshold = 0.4
+      const stickerEndThreshold = 0.9
+      let stickerOpacity = 0
+      
+      if (progress > stickerStartThreshold && progress <= stickerEndThreshold) {
+        // 在40%-90%之间渐变显示贴面
+        const stickerProgress = (progress - stickerStartThreshold) / (stickerEndThreshold - stickerStartThreshold)
+        stickerOpacity = this.smoothEasing(stickerProgress) * 0.85 // 最大透明度设为0.85，保持一些透明感
+      } else if (progress > stickerEndThreshold) {
+        // 90%后完全显示
+        stickerOpacity = 1.0
+      }
+
+      // 更新魔方几何体
+      try {
+        cubeInstance.regenerateModel(newSize)
+        cubeInstance.updatePieceCornerRadius(newRadius)
+        cubeInstance.updateMainColor(newColor)
+        
+        // 控制贴面显示
+        this.updateStickerOpacity(cubeInstance, stickerOpacity)
+      } catch (error) {
+        console.error('更新魔方几何体失败:', error)
+        this.emit('animationError', { error: error.message })
+        return
+      }
+
+      // 发出动画更新事件
+      this.emit('animationUpdate', {
+        cubeSizeMultiplier: (newSize / defaultPieceSize) * 60,
+        gapSizeMultiplier: 0,
+        currentRotationX: this.initialRotationX,
+        cornerRadius: newRadius,
+        pieceSize: newSize,
+        currentColor: newColor,
+        colorProgress: easedColorProgress,
+        stickerOpacity: stickerOpacity,
+        phase: '魔方出场动画：边长增长、角半径调整、颜色渐变和贴面显示',
+        progress: progress,
+        isCubeEntrance: true // 标记为魔方出场动画
+      })
+    }, {
+      duration: 2000,
+      name: '魔方出场动画',
+      easing: this.elasticEasing
+    })
+
+    this.timeline.play()
+
+    this.timeline.on('complete', () => {
+   
+      cubeInstance.showEdges()
+      this.updateStickerOpacity(cubeInstance, 1.0)
+      
+      this.emit('animationComplete', { 
+        phase: 'cubeEntranceComplete',
+        isCubeEntrance: true
+      })
+    })
+
+    this.timeline.on('step', (item, index) => {
+      this.emit('animationStep', { 
+        name: item.name, 
+        index: index,
+        isCubeEntrance: true
+      })
+    })
+  }
+
+  // ===== 辅助方法 =====
+
+  updateStickerOpacity(cubeInstance, opacity) {
+    if (!cubeInstance?.edges) return
+    
+    cubeInstance.edges.forEach(edge => {
+      if (edge?.material) {
+        // 确保材质支持透明度
+        if (!edge.material.transparent) {
+          edge.material.transparent = true
+          edge.material.needsUpdate = true
+        }
+        
+        // 直接设置透明度
+        edge.visible = opacity > 0
+        edge.material.opacity = opacity
+      }
+    })
   }
 
   /**
-   * 设置其他类型的动画时间线
-   * 可以根据需要添加更多动画类型
+   * 弹性缓动函数
    */
-  setupOtherTimeline(type, params) {
-    switch (type) {
-      case 'fade':
-        this.setupFadeTimeline(params)
-        break
-      case 'slide':
-        this.setupSlideTimeline(params)
-        break
-      default:
-        console.warn(`未知的动画类型: ${type}`)
-    }
+  elasticEasing(progress) {
+    const p = 0.3
+    return Math.pow(2, -10 * progress) * Math.sin((progress - p / 4) * (2 * Math.PI) / p) + 1
   }
 
   /**
-   * 淡入淡出动画
+   * 平滑缓动函数
    */
-  setupFadeTimeline(params) {
-    // 实现淡入淡出动画逻辑
+  smoothEasing(progress) {
+    return progress < 0.5 
+      ? 2 * progress * progress 
+      : 1 - Math.pow(-2 * progress + 2, 2) / 2
   }
 
   /**
-   * 滑动动画
+   * 颜色插值函数
    */
-  setupSlideTimeline(params) {
-    // 实现滑动动画逻辑
+  interpolateColor(color1, color2, factor) {
+    const r1 = (color1 >> 16) & 255
+    const g1 = (color1 >> 8) & 255
+    const b1 = color1 & 255
+    
+    const r2 = (color2 >> 16) & 255
+    const g2 = (color2 >> 8) & 255
+    const b2 = color2 & 255
+    
+    const r = Math.round(r1 + (r2 - r1) * factor)
+    const g = Math.round(g1 + (g2 - g1) * factor)
+    const b = Math.round(b1 + (b2 - b1) * factor)
+    
+    return (r << 16) | (g << 8) | b
   }
 }

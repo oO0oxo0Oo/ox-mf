@@ -1,70 +1,73 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
+import { useCubeStore } from './cube.js'
 
-/**
- * 动画状态管理store
- * 负责管理所有页面的动画状态和参数
- * 使用事件驱动架构，监听动画管理器事件并分发
- */
+
 export const useAnimationStore = defineStore('animation', () => {
+  // ===== 获取cube store引用 =====
+  const cubeStore = useCubeStore()
+  
   // ===== 状态定义 =====
   
-  // 立方体动画参数
-  const cubeSizeMultiplier = ref(60)
-  const gapSizeMultiplier = ref(0)
-  const opacityMultiplier = ref(0.9)
+  // 粒子视觉效果参数
+  const particleParams = ref({
+    sizeMultiplier: 60,
+    gapMultiplier: 0,
+    opacityMultiplier: 0.9
+  })
   
-  // 相机动画参数
-  const currentRotationX = ref(0)
-  const currentRotationY = ref(0)
-  const baseRadius = ref(8)
+  // 相机参数
+  const cameraParams = ref({
+    rotationX: 0,
+    rotationY: 0,
+    radius: 8
+  })
   
   // 动画状态
-  const isPlaying = ref(false)
-  const currentPhase = ref('')
-  const animationProgress = ref(0)
-  const currentAnimationName = ref('')
+  const animationState = ref({
+    isPlaying: false,
+    currentPhase: '',
+    progress: 0,
+    currentAnimation: ''
+  })
   
-  // 时间线控制
-  const timeline = ref(null)
-  const animationManager = ref(null)
+  // 系统实例
+  const instances = ref({
+    timeline: null,
+    animationManager: null
+  })
   
-  // 事件监听器
+  // 事件系统
   const eventListeners = ref({})
   
   // ===== 计算属性 =====
   
+  // 统一的动画信息
   const animationInfo = computed(() => ({
-    isPlaying: isPlaying.value,
-    currentPhase: currentPhase.value,
-    progress: animationProgress.value,
-    currentAnimation: currentAnimationName.value,
-    cubeSize: cubeSizeMultiplier.value,
-    gapSize: gapSizeMultiplier.value,
-    opacity: opacityMultiplier.value
+    // 动画状态
+    ...animationState.value,
+    // 粒子参数
+    ...particleParams.value,
+    // 魔方参数（从 cubeStore 获取）
+    cornerRadius: cubeStore.config.pieceCornerRadius,
+    pieceSize: cubeStore.config.pieceSize,
+    edgeCornerRoundness: cubeStore.config.edgeCornerRoundness,
+    edgeScale: cubeStore.config.edgeScale
   }))
   
-  const cameraPosition = computed(() => ({
-    rotationX: currentRotationX.value,
-    rotationY: currentRotationY.value,
-    radius: baseRadius.value
+  // 相机信息
+  const cameraInfo = computed(() => ({
+    ...cameraParams.value
   }))
   
   // ===== 事件管理 =====
-  
-  /**
-   * 添加事件监听器
-   */
   function on(eventName, listener) {
     if (!eventListeners.value[eventName]) {
       eventListeners.value[eventName] = []
     }
     eventListeners.value[eventName].push(listener)
   }
-  
-  /**
-   * 移除事件监听器
-   */
+
   function off(eventName, listener) {
     if (eventListeners.value[eventName]) {
       const index = eventListeners.value[eventName].indexOf(listener)
@@ -74,9 +77,6 @@ export const useAnimationStore = defineStore('animation', () => {
     }
   }
   
-  /**
-   * 发出事件
-   */
   function emit(eventName, data) {
     if (eventListeners.value[eventName]) {
       eventListeners.value[eventName].forEach(listener => {
@@ -88,192 +88,219 @@ export const useAnimationStore = defineStore('animation', () => {
       })
     }
   }
+
   
-  // ===== 操作方法 =====
-  
-  /**
-   * 设置时间线实例
-   */
   function setTimeline(timelineInstance) {
-    timeline.value = timelineInstance
+    instances.value.timeline = timelineInstance
   }
   
-  /**
-   * 设置动画管理器实例
-   */
   function setAnimationManager(managerInstance) {
-    animationManager.value = managerInstance
+    instances.value.animationManager = managerInstance
     
     // 监听动画管理器的事件
-    if (animationManager.value) {
-      // 监听动画更新事件
-      animationManager.value.on('animationUpdate', (data) => {
-        // 更新store中的状态
-        if (data.cubeSizeMultiplier !== undefined) {
-          updateCubeSize(data.cubeSizeMultiplier)
-        }
-        if (data.gapSizeMultiplier !== undefined) {
-          updateGapSize(data.gapSizeMultiplier)
-        }
-        if (data.currentRotationX !== undefined) {
-          updateCameraRotation(data.currentRotationX, currentRotationY.value)
-        }
-        if (data.phase) {
-          currentPhase.value = data.phase
-        }
-        
-        // 发出粒子更新事件，通知组件
+    if (instances.value.animationManager) {
+      const manager = instances.value.animationManager
+      
+      // 动画更新事件
+      manager.on('animationUpdate', (data) => {
+        updateFromAnimationData(data)
         emit('particleUpdate', data)
       })
       
-      // 监听动画完成事件
-      animationManager.value.on('animationComplete', (data) => {
-        isPlaying.value = false
-        currentPhase.value = ''
+      // 动画完成事件
+      manager.on('animationComplete', (data) => {
+        animationState.value.isPlaying = false
+        animationState.value.currentPhase = ''
         emit('animationComplete', data)
       })
       
-      // 监听动画步骤事件
-      animationManager.value.on('animationStep', (data) => {
-        currentAnimationName.value = data.name
+      // 动画步骤事件
+      manager.on('animationStep', (data) => {
+        animationState.value.currentAnimation = data.name
         emit('animationStep', data)
       })
       
-      // 监听动画错误事件
-      animationManager.value.on('animationError', (data) => {
-        isPlaying.value = false
+      // 动画错误事件
+      manager.on('animationError', (data) => {
+        animationState.value.isPlaying = false
         console.error('动画执行错误:', data.error)
         emit('animationError', data)
       })
     }
   }
   
-  /**
-   * 更新立方体大小
-   */
-  function updateCubeSize(newSize) {
-    cubeSizeMultiplier.value = newSize
+  // ===== 统一更新方法 =====
+  
+  function updateFromAnimationData(data) {
+    // 更新粒子参数
+    if (data.cubeSizeMultiplier !== undefined) {
+      particleParams.value.sizeMultiplier = data.cubeSizeMultiplier
+    }
+    if (data.gapSizeMultiplier !== undefined) {
+      particleParams.value.gapMultiplier = data.gapSizeMultiplier
+    }
+    
+    // 更新相机参数
+    if (data.currentRotationX !== undefined) {
+      cameraParams.value.rotationX = data.currentRotationX
+    }
+    if (data.currentRotationY !== undefined) {
+      cameraParams.value.rotationY = data.currentRotationY
+    }
+    
+    // 更新魔方参数（同步到 cubeStore）
+    if (data.cornerRadius !== undefined) {
+      cubeStore.setPieceCornerRadius(data.cornerRadius)
+    }
+    
+    // 更新动画状态
+    if (data.phase) {
+      animationState.value.currentPhase = data.phase
+    }
+    if (data.progress !== undefined) {
+      animationState.value.progress = data.progress
+    }
   }
   
-  /**
-   * 更新间距大小
-   */
-  function updateGapSize(newGap) {
-    gapSizeMultiplier.value = newGap
+  // ===== 便利更新方法 =====
+  
+  function updateParticleParams(updates) {
+    Object.assign(particleParams.value, updates)
   }
   
-  /**
-   * 更新透明度
-   */
-  function updateOpacity(newOpacity) {
-    opacityMultiplier.value = newOpacity
+  function updateCameraParams(updates) {
+    Object.assign(cameraParams.value, updates)
   }
   
-  /**
-   * 更新相机旋转
-   */
-  function updateCameraRotation(rotationX, rotationY) {
-    currentRotationX.value = rotationX
-    currentRotationY.value = rotationY
+  function updateAnimationState(updates) {
+    Object.assign(animationState.value, updates)
   }
   
-  /**
-   * 更新相机半径
-   */
-  function updateCameraRadius(newRadius) {
-    baseRadius.value = newRadius
-  }
+
   
-  /**
-   * 更新动画状态
-   */
-  function updateAnimationState(state) {
-    isPlaying.value = state.isPlaying || false
-    currentPhase.value = state.phase || ''
-    animationProgress.value = state.progress || 0
-    currentAnimationName.value = state.name || ''
-  }
+  // ===== 动画控制方法 =====
   
-  /**
-   * 开始立方体动画
-   */
-  function startCubeAnimation() {
-    if (!animationManager.value) {
+  function startAnimation(type, cubeInstance = null) {
+    const manager = instances.value.animationManager
+    const timeline = instances.value.timeline
+    
+    if (!manager) {
       console.warn('动画管理器未初始化')
-      return
+      return false
     }
     
-    if (!timeline.value) {
-      console.warn('时间线未初始化')
-      return
-    }
-    
-    isPlaying.value = true
-    currentAnimationName.value = '立方体动画'
-    
-    // 调用动画管理器的立方体动画时间线（用于点击开始按钮后的动画）
-    animationManager.value.setupCubeAnimationTimeline()
-  }
-  
-  /**
-   * 暂停动画
-   */
-  function pauseAnimation() {
-    if (timeline.value) {
-      timeline.value.pause()
-      isPlaying.value = false
-    }
-  }
-  
-  /**
-   * 停止动画
-   */
-  function stopAnimation() {
-    if (timeline.value) {
-      timeline.value.stop()
-      isPlaying.value = false
-      currentPhase.value = ''
-      animationProgress.value = 0
-    }
-  }
-  
-  /**
-   * 重置动画
-   */
-  function resetAnimation() {
-    if (timeline.value) {
-      timeline.value.reset()
-      isPlaying.value = false
-      currentPhase.value = ''
-      animationProgress.value = 0
+    try {
+      animationState.value.isPlaying = true
+      animationState.value.currentAnimation = type
       
-      // 重置参数到初始值
-      updateCubeSize(60)
-      updateGapSize(4)
-      updateOpacity(0.9)
-      updateCameraRotation(0, 0)
+      switch (type) {
+        case 'cubeEntrance':
+          if (!cubeInstance) {
+            throw new Error('魔方实例未提供')
+          }
+          animationState.value.currentPhase = '魔方出场动画'
+          manager.setupCubeEntranceTimeline(cubeInstance)
+          break
+          
+        case 'cubeAnimation':
+          if (!timeline) {
+            throw new Error('时间线未初始化')
+          }
+          animationState.value.currentPhase = '立方体动画'
+          manager.setupCubeAnimationTimeline()
+          break
+          
+        case 'continuous':
+          if (!timeline || !cubeInstance) {
+            throw new Error('时间线或魔方实例未提供')
+          }
+          animationState.value.currentPhase = '连续动画序列'
+          if (manager.setCubeInstance) {
+            manager.setCubeInstance(cubeInstance)
+          }
+          manager.setupCubeAnimationTimeline()
+          break
+          
+        default:
+          throw new Error(`未知动画类型: ${type}`)
+      }
+      
+      console.log(`${type} 动画已启动`)
+      return true
+      
+    } catch (error) {
+      console.error(`启动 ${type} 动画时出错:`, error)
+      animationState.value.isPlaying = false
+      animationState.value.currentPhase = ''
+      emit('animationError', { error: error.message, type })
+      return false
     }
   }
   
-  /**
-   * 切换循环播放
-   */
+
+  
+  // 控制方法
+  function pauseAnimation() {
+    const timeline = instances.value.timeline
+    if (timeline) {
+      timeline.pause()
+      animationState.value.isPlaying = false
+    }
+  }
+  
+  function stopAnimation() {
+    const timeline = instances.value.timeline
+    if (timeline) {
+      timeline.stop()
+      animationState.value.isPlaying = false
+      animationState.value.currentPhase = ''
+      animationState.value.progress = 0
+    }
+  }
+  
+  function resetAnimation() {
+    const timeline = instances.value.timeline
+    if (timeline) {
+      timeline.reset()
+      // 重置所有状态
+      Object.assign(animationState.value, {
+        isPlaying: false,
+        currentPhase: '',
+        progress: 0,
+        currentAnimation: ''
+      })
+      Object.assign(particleParams.value, {
+        sizeMultiplier: 60,
+        gapMultiplier: 0,
+        opacityMultiplier: 0.9
+      })
+      Object.assign(cameraParams.value, {
+        rotationX: 0,
+        rotationY: 0,
+        radius: 8
+      })
+      // 重置魔方参数
+      cubeStore.updateCubeGeometry({
+        pieceSize: 1/3,
+        pieceCornerRadius: 0.12,
+        edgeCornerRoundness: 0.08,
+        edgeScale: 1.0
+      })
+    }
+  }
+  
   function toggleLoop() {
-    if (timeline.value) {
-      const currentLoopState = timeline.value.getInfo().isLooping
-      timeline.value.setLoop(!currentLoopState)
+    const timeline = instances.value.timeline
+    if (timeline) {
+      const currentLoopState = timeline.getInfo().isLooping
+      timeline.setLoop(!currentLoopState)
       console.log(`循环播放已${!currentLoopState ? '开启' : '关闭'}`)
     }
   }
   
-  /**
-   * 获取时间线信息
-   */
   function getTimelineInfo() {
-    if (timeline.value) {
-      return timeline.value.getInfo()
-    }
-    return {
+    const timeline = instances.value.timeline
+    return timeline ? timeline.getInfo() : {
       isPlaying: false,
       isLooping: false,
       currentItem: null,
@@ -284,43 +311,38 @@ export const useAnimationStore = defineStore('animation', () => {
   // ===== 导出 =====
   
   return {
-    // 状态
-    cubeSizeMultiplier,
-    gapSizeMultiplier,
-    opacityMultiplier,
-    currentRotationX,
-    currentRotationY,
-    baseRadius,
-    isPlaying,
-    currentPhase,
-    animationProgress,
-    currentAnimationName,
-    timeline,
-    animationManager,
+    // ===== 状态（新结构） =====
+    particleParams,
+    cameraParams,
+    animationState,
+    instances,
     
-    // 计算属性
+    // ===== 计算属性 =====
     animationInfo,
-    cameraPosition,
+    cameraInfo,
     
-    // 事件管理
-    on,
-    off,
-    emit,
-    
-    // 方法
+    // ===== 核心方法 =====
+    // 实例管理
     setTimeline,
     setAnimationManager,
-    updateCubeSize,
-    updateGapSize,
-    updateOpacity,
-    updateCameraRotation,
-    updateCameraRadius,
+    
+    // 状态更新
+    updateParticleParams,
+    updateCameraParams,
     updateAnimationState,
-    startCubeAnimation,
+    updateFromAnimationData,
+    
+    // 动画控制
+    startAnimation,
     pauseAnimation,
     stopAnimation,
     resetAnimation,
     toggleLoop,
-    getTimelineInfo
+    getTimelineInfo,
+    
+    // 事件系统
+    on,
+    off,
+    emit
   }
 })

@@ -21,7 +21,7 @@ function update(delta) {
     deltaTime.value += delta;
 }
 
-const { start: startAnim, stop: stopAnim } = useAnimation(update);
+const { start: startAnim, stop: stopAnim, destroy: destroyAnim } = useAnimation(update);
 
 function start(continueGame = false) {
     if(running.value) return;
@@ -44,6 +44,7 @@ function reset() {
 
 onUnmounted(() => {
     stop();
+    destroyAnim();
 });
 
 defineExpose({

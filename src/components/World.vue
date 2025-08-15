@@ -59,8 +59,9 @@ onMounted(() => {
 
 onUnmounted(() => {
     window.removeEventListener('resize', resize);
-    // 停止动画循环
+    // 停止并销毁动画循环
     stopAnim();
+    destroyAnim();
     if (renderer) {
         renderer.dispose();
         renderer.forceContextLoss && renderer.forceContextLoss();
@@ -71,7 +72,7 @@ onUnmounted(() => {
 function update(){
     renderer.render(scene, camera);
 }
-const { start: startAnim, stop: stopAnim } = useAnimation(update);
+const { start: startAnim, stop: stopAnim, destroy: destroyAnim } = useAnimation(update);
 
 function resize(){
     const width = containerRef.value.offsetWidth;

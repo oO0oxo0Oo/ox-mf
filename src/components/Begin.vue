@@ -1,950 +1,731 @@
 <template>
-    <!-- 主容器 - 包含所有粒子效果和UI元素 -->
-    <div ref="container" class="particle-container">
-      <!-- 背景光晕效果 -->
-      <div class="glow"></div>
-      <!-- 模式名称显示 -->
-      <div id="patternName" :style="{ opacity: patternNameOpacity }">{{ currentPatternName }}</div>
-      <!-- 操作提示 -->
-      <div id="instructions" @click="triggerParticleFlyAway">Hover to interact</div>
-      
-      <!-- 添加间隙控制器 -->
-      <div class="gap-controller">
-        <label>间隙大小: {{ gapSizeMultiplier.toFixed(1) }}</label>
-        <input 
-          type="range" 
-          min="0" 
-          max="100" 
-          step="0.1" 
-          :value="gapSizeMultiplier"
-          @input="updateGapSize(parseFloat($event.target.value))"
-        />
-        <button @click="updateGapSize(4.0)">重置</button>
-      </div>
-
-      <!-- 添加大正方体边长控制器 -->
-      <div class="gap-controller" style="top: 80px;">
-        <label>正方体边长: {{ cubeSizeMultiplier.toFixed(1) }}</label>
-        <input 
-          type="range" 
-          min="20" 
-          max="300" 
-          step="1" 
-          :value="cubeSizeMultiplier"
-          @input="updateCubeSize(parseFloat($event.target.value))"
-        />
-        <button @click="updateCubeSize(60.0)">重置</button>
-      </div>
-
-      <!-- 添加透明度控制器 -->
-      <div class="gap-controller" style="top: 140px;">
-        <label>透明度: {{ opacityMultiplier.toFixed(2) }}</label>
-        <input 
-          type="range" 
-          min="0" 
-          max="1" 
-          step="0.01" 
-          :value="opacityMultiplier"
-          @input="updateOpacity(parseFloat($event.target.value))"
-        />
-        <button @click="updateOpacity(0.9)">重置</button>
-      </div>
-      <div class="gap-controller" style="top: 200px;">
-        <button @click="startAnimation">开始</button>
-        <button @click="pauseAnimation">暂停</button>
-        <button @click="stopAnimation">停止</button>
-        <button @click="resetAnimation">重置</button>
-        <button @click="toggleLoop" :style="{ background: animationStore.getTimelineInfo().isLooping ? '#4CAF50' : '#666' }">
-          {{ animationStore.getTimelineInfo().isLooping ? '循环开启' : '循环关闭' }}
-        </button>
-      </div>
-      
-      <!-- 时间线状态显示 -->
-      <div class="gap-controller" style="top: 260px; flex-direction: column; align-items: flex-start;">
-        <div>动画状态: {{ animationStore.getTimelineInfo().isPlaying ? '播放中' : '已停止' }}</div>
-        <div>当前动画: {{ animationStore.getTimelineInfo().currentItem?.name || '无' }}</div>
-        <div>进度: {{ Math.round(animationStore.getTimelineInfo().progress * 100) }}%</div>
-      </div>
+  <!-- 主容器 - 包含所有粒子效果和UI元素 -->
+  <div ref="container" class="particle-container">
+    <!-- 背景光晕效果 -->
+    <div class="glow"></div>
+    
+    <!-- 动画控制按钮 -->
+    <div class="animation-controls">
+      <button @click="startAnimation" class="start-btn">开始动画</button>
     </div>
-  </template>
-  
-  <script setup>
-  import { ref, onMounted, onUnmounted, nextTick } from 'vue'
-  
-  // Three.js 核心库导入
-  import * as THREE from 'three'
-  
-  // Three.js 后处理效果导入
-  import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js'
-  import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js'
-  import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js'
-  import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js'
-  
-  // 导入统一的动画系统
-  import { useAnimation } from '../composable/useAnimation.js'
-  import { useTimeline } from '../composable/useTimeline.js'
-  import { TimelineAnimationManager } from '../animations/timelineAnimations.js'
-  import { useAnimationStore } from '../stores/animation.js'
-  
-  // ===== Vue 响应式数据 =====
-  const container = ref(null)                    // DOM容器引用
-  const currentPatternName = ref('Stardust Grid') // 当前模式名称
-  const patternNameOpacity = ref(0)              // 模式名称透明度
-  
-  // ===== 时间线动画系统 =====
-  const timeline = useTimeline()
-  const animationStore = useAnimationStore()
+  </div>
+</template>
 
-  // ===== 本地状态变量（保留原有定义） =====
-  const gapSizeMultiplier = ref(0.0)  // 间隙倍数，从0开始
-  const cubeSizeMultiplier = ref(60.0)  // 大正方体边长倍数
-  const opacityMultiplier = ref(0.9)  // 粒子透明度倍数
-  
-  // ===== 同步store状态的函数 =====
-  
-  /**
-   * 同步store中的状态到本地变量
-   */
-  function syncStoreState() {
-    gapSizeMultiplier.value = animationStore.gapSizeMultiplier
-    cubeSizeMultiplier.value = animationStore.cubeSizeMultiplier
-    opacityMultiplier.value = animationStore.opacityMultiplier
-  }
-  
-  /**
-   * 监听store状态变化并同步到本地
-   */
-  function watchStoreChanges() {
-    // 监听store中的状态变化
-    animationStore.$subscribe((mutation, state) => {
-      // 当store中的值发生变化时，同步到本地变量
-      if (mutation.type === 'direct') {
-        syncStoreState()
+<script setup>
+import { ref, onMounted, onUnmounted } from 'vue'
+
+// Three.js 核心库导入
+import * as THREE from 'three'
+
+// Three.js 后处理效果导入
+import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js'
+import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js'
+import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js'
+import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js'
+
+// 导入统一的动画系统
+import { useAnimation } from '../composable/useAnimation.js'
+import { useTimeline } from '../composable/useTimeline.js'
+import { TimelineAnimationManager } from '../animations/timelineAnimations.js'
+import { useAnimationStore } from '../stores/animation.js'
+import { useWindowEvents } from '../composable/useEventListeners.js'
+import { useDraggable } from '../composable/useDraggable.js'
+
+// 定义组件事件
+const emit = defineEmits(['animation-complete'])
+
+// ===== Vue 响应式数据 =====
+const container = ref(null)// DOM容器引用
+
+// ===== 时间线动画系统 =====
+const timeline = useTimeline()
+const animationStore = useAnimationStore()
+
+// ===== 窗口事件管理 =====
+const { addWindowListener, cleanup: cleanupWindowEvents } = useWindowEvents()
+
+// ===== 拖拽系统 =====
+let dragSystem = null
+
+// 初始化拖拽系统（延迟到 DOM 准备好后）
+function initDragSystem() {
+  if (container.value && !dragSystem) {
+    dragSystem = useDraggable(container, {
+      calcDelta: true,
+      onDragStart: (pos) => {
+        // 拖拽开始时可以添加视觉反馈
+      },
+      onDragMove: (pos) => {
+        // 处理相机旋转
+        if (pos.delta) {
+          // 修正旋转方向：反转deltaX，保持deltaY的符号
+          targetRotationX.value -= pos.delta.x * 0.01  // 水平旋转（反转方向）
+          targetRotationY.value += pos.delta.y * 0.01  // 垂直旋转（保持原方向）
+          
+          // 恢复垂直角度限制，防止相机翻转
+          targetRotationY.value = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, targetRotationY.value))
+        }
+        
+        // 更新鼠标位置用于粒子交互
+        updateScreenMouse(pos.current.x, pos.current.y)
+      },
+      onDragEnd: (pos) => {
+        // 拖拽结束时可以添加动画效果
       }
     })
-  }
-
-  // ===== Three.js 核心变量 =====
-  let scene, camera, renderer, particles  // 场景、相机、渲染器、粒子系统（移除stars）
-  let composer                                   // 后处理效果组合器
-  let time = 0                                   // 动画时间计数器
-  let currentPattern = 0                         // 当前模式索引
-  
-  // ===== 鼠标交互变量 =====
-  const screenMouse = new THREE.Vector2(10000, 10000)  // 屏幕鼠标坐标（初始值远离屏幕）
-  const worldMouse = new THREE.Vector3()               // 3D世界鼠标坐标
-  const lastWorldMouse = new THREE.Vector3()           // 上一帧的3D鼠标坐标
-
-  // ===== 手动旋转控制变量 =====
-  let isMouseDown = false                              // 鼠标是否按下
-  let mouseDownPosition = new THREE.Vector2()          // 鼠标按下时的位置
-  let currentRotationX = 0                             // 当前X轴旋转角度
-  let currentRotationY = 0                             // 当前Y轴旋转角度
-  let targetRotationX = 0                              // 目标X轴旋转角度
-  let targetRotationY = 0                              // 目标Y轴旋转角度
-  const rotationSpeed = 0.1                            // 旋转速度
-  const baseRadius = 100                               // 相机基础距离
-  
-  // ===== 初始旋转角度设置 =====
-  const initialRotationX = Math.PI / 4                 // 初始X轴旋转角度（45度）
-  const initialRotationY = Math.PI / 6                 // 初始Y轴旋转角度（30度）
-  
-  // ===== 核心参数配置 =====
-  const particleCount = 25000      // 主粒子数量 - 影响性能和视觉效果
-  const starCount = 6000           // 背景星空数量 - 影响背景密度
-  const patternNames = ["Stardust Grid"]  // 模式名称数组（当前只有一个模式）
-
-  // 在变量声明部分添加
-  // 修改createGrid函数，让间隙独立于立方体边长
-  function createGrid(i, count) {
-    // 计算立方体的边长（向上取整确保能容纳所有粒子）
-    const sideLength = Math.ceil(Math.cbrt(count))  // 25000 -> 29
     
-    // 计算网格间距（总网格大小使用动态值）
-    const spacing = cubeSizeMultiplier.value / sideLength
-    
-    // 计算网格中心偏移量，使网格中心对齐到原点
-    const halfGrid = (sideLength - 1) * spacing / 2
-    
-    // 将粒子索引转换为3D网格坐标
-    const iz = Math.floor(i / (sideLength * sideLength))  // Z层索引（最外层）
-    const iy = Math.floor((i % (sideLength * sideLength)) / sideLength)  // Y行索引（中间层）
-    const ix = i % sideLength  // X列索引（最内层）
-    
-    // 魔方效果：将29x29x29的网格分成27个小块
-    const cubeSize = Math.ceil(sideLength / 3)  // 每个小块的边长 = 10 (29/3向上取整)
-    const gapSize = Math.max(0, gapSizeMultiplier.value)  // 使用固定的间隙大小，不受spacing影响，确保不小于0
-    
-    // 计算当前粒子属于哪个小块 (0-26)
-    const cubeZ = Math.floor(iz / cubeSize)  // 小块在Z方向的位置 (0,1,2)
-    const cubeY = Math.floor(iy / cubeSize)  // 小块在Y方向的位置 (0,1,2)
-    const cubeX = Math.floor(ix / cubeSize)  // 小块在X方向的位置 (0,1,2)
-    
-    // 计算粒子在小块内的相对位置
-    const localZ = iz % cubeSize  // 粒子在小块内的Z位置
-    const localY = iy % cubeSize  // 粒子在小块内的Y位置
-    const localX = ix % cubeSize  // 粒子在小块内的X位置
-    
-    // 计算小块的中心位置（让整个魔方以原点为中心）
-    const cubeCenterX = (cubeX - 1) * (cubeSize * spacing + gapSize)
-    const cubeCenterY = (cubeY - 1) * (cubeSize * spacing + gapSize)
-    const cubeCenterZ = (cubeZ - 1) * (cubeSize * spacing + gapSize)
-    
-    // 计算粒子在小块内的相对位置（相对于小块中心）
-    const localOffsetX = (localX - (cubeSize - 1) / 2) * spacing
-    const localOffsetY = (localY - (cubeSize - 1) / 2) * spacing
-    const localOffsetZ = (localZ - (cubeSize - 1) / 2) * spacing
-    
-    // 最终位置 = 小块中心位置 + 粒子在小块内的相对位置
-    const finalX = cubeCenterX + localOffsetX
-    const finalY = cubeCenterY + localOffsetY
-    const finalZ = cubeCenterZ + localOffsetZ
-    
-    return new THREE.Vector3(finalX, finalY, finalZ)
-  }
-  
-  // 形态函数数组 - 当前只包含立方网格分布函数
-  const patterns = [createGrid]
-  
-  // ===== 颜色调色板配置 =====
-  // 立方网格配色方案 - 蓝色系渐变
-  // 包含4种不同深浅的蓝色，用于粒子的颜色变化
-  const colorPalettes = [
-    [
-      new THREE.Color(0x0077ff),  // 深蓝色
-      new THREE.Color(0x00aaff),  // 中蓝色
-      new THREE.Color(0x44ccff),  // 浅蓝色
-      new THREE.Color(0x0055cc)   // 深蓝紫色
-    ]
-  ]
-  
-  // ===== 主粒子系统 =====
-  /**
-   * 创建主粒子系统 - 生成主要的粒子效果
-   * 功能：
-   * 1. 根据立方网格分布函数生成粒子位置
-   * 2. 为每个粒子分配颜色、大小和类型
-   * 3. 使用着色器实现粒子的动画和交互效果
-   * 
-   * @returns {THREE.Points} 粒子对象
-   */
-  function createParticleSystem() {
-    // 创建几何体
-    const geometry = new THREE.BufferGeometry()
-    
-    // 创建数据数组
-    const positions = new Float32Array(particleCount * 3)  // 位置数据 (x, y, z)
-    const colors = new Float32Array(particleCount * 3)     // 颜色数据 (r, g, b)
-    const sizes = new Float32Array(particleCount)          // 大小数据
-    const indices = new Float32Array(particleCount)        // 索引数据（用于动画）
-    const particleTypes = new Float32Array(particleCount)  // 粒子类型（用于不同渲染效果）
-    
-    // 获取初始模式和颜色调色板
-    const initialPattern = patterns[0]      // 立方网格分布函数
-    const initialPalette = colorPalettes[0] // 蓝色系颜色调色板
-  
-    // 为每个粒子生成数据
-    for (let i = 0; i < particleCount; i++) {
-      indices[i] = i  // 粒子索引（用于动画计算）
-      particleTypes[i] = Math.floor(Math.random() * 3)  // 随机分配粒子类型（0, 1, 2）
-      
-      // 根据分布函数计算粒子位置
-      const pos = initialPattern(i, particleCount)
-      positions[i * 3] = pos.x     // X坐标
-      positions[i * 3 + 1] = pos.y // Y坐标
-      positions[i * 3 + 2] = pos.z // Z坐标
-  
-      // 为粒子分配颜色（从调色板中随机选择并添加变化）
-      const colorIndex = Math.floor(Math.random() * initialPalette.length)
-      const baseColor = initialPalette[colorIndex]
-      const variation = 0.85 + Math.random() * 0.3  // 颜色变化范围 [0.85, 1.15]
-      const finalColor = baseColor.clone().multiplyScalar(variation)
-      
-      // 存储颜色数据
-      colors[i * 3] = finalColor.r
-      colors[i * 3 + 1] = finalColor.g
-      colors[i * 3 + 2] = finalColor.b
-      
-      // 为粒子分配大小（随机大小范围 [1.0, 2.5]）
-      sizes[i] = 1.0 + Math.random() * 1.5
+    // 启用拖拽系统
+    if (dragSystem && dragSystem.enable) {
+      dragSystem.enable()
     }
-  
-    // 将数据绑定到几何体属性
-    geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3))    // 位置属性
-    geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3))         // 颜色属性
-    geometry.setAttribute('size', new THREE.BufferAttribute(sizes, 1))           // 大小属性
-    geometry.setAttribute('index', new THREE.BufferAttribute(indices, 1))        // 索引属性
-    geometry.setAttribute('particleType', new THREE.BufferAttribute(particleTypes, 1))  // 类型属性
-    geometry.userData.currentColors = new Float32Array(colors)  // 存储当前颜色数据（用于后续更新）
-    
-    // 计算几何体的边界框，用于动态平面检测
-    geometry.computeBoundingBox()
-  
-    // 创建粒子着色器材质
-    const material = new THREE.ShaderMaterial({
-      // 着色器统一变量
-      uniforms: {
-        time: { value: 0 },                                    // 时间变量（用于动画）
-        mousePos: { value: new THREE.Vector3(10000, 10000, 0) }, // 鼠标位置（初始值远离屏幕）
-        opacity: { value: opacityMultiplier.value }                  // 添加透明度统一变量
-      },
-             // 顶点着色器 - 处理粒子的位置、动画和交互
-       vertexShader: `
-         // 统一变量（从JavaScript传入）
-         uniform float time;        // 时间变量（用于动画）
-         uniform vec3 mousePos;     // 鼠标在3D空间中的位置
-         
-         // 属性变量（每个粒子独有的数据）
-         attribute float size;       // 粒子大小
-         attribute float index;      // 粒子索引（用于动画计算）
-         attribute float particleType; // 粒子类型（0, 1, 2，用于不同渲染效果）
-         
-         // 传递给片段着色器的变量
-         varying vec3 vColor;        // 粒子颜色
-         varying float vDistanceToMouse; // 粒子到鼠标的距离（用于交互效果）
-         varying float vType;        // 粒子类型
-         varying float vIndex;       // 粒子索引
-         
-         // 伪随机数生成函数（用于噪声效果）
-         // 输入：2D坐标，输出：0-1之间的随机数
-         float rand(vec2 co) {
-           return fract(sin(dot(co.xy ,vec2(12.9898,78.233))) * 43758.5453);
-         }
-         
-         void main() {
-           // 传递数据到片段着色器
-           vColor = color;
-           vType = particleType;
-           vIndex = index;
-           
-           // 获取粒子原始位置
-           vec3 pos = position;
-           
-           // 时间参数（控制动画速度）
-           float T = time * 0.5;
-           float idx = index * 0.01;  // 粒子索引归一化
-           
-           // 第一层噪声动画 - 创建波浪般的运动
-           float noiseFactor1 = sin(idx * 30.0 + T * 15.0) * 0.4 + 0.6;  // 噪声因子 [0.2, 1.0]
-           vec3 offset1 = vec3(
-             cos(T * 1.2 + idx * 5.0) * noiseFactor1,  // X轴偏移
-             sin(T * 0.9 + idx * 6.0) * noiseFactor1,  // Y轴偏移
-             cos(T * 1.1 + idx * 7.0) * noiseFactor1   // Z轴偏移
-           ) * 0.4;  // 偏移幅度
-           
-           // 第二层噪声动画 - 创建更细微的抖动
-           float noiseFactor2 = rand(vec2(idx, idx * 0.5)) * 0.5 + 0.5;  // 随机噪声因子
-           float speedFactor = 0.3;  // 速度因子（控制动画速度）
-           vec3 offset2 = vec3(
-             sin(T * speedFactor * 1.3 + idx * 1.1) * noiseFactor2,  // X轴抖动
-             cos(T * speedFactor * 1.7 + idx * 1.2) * noiseFactor2,  // Y轴抖动
-             sin(T * speedFactor * 1.1 + idx * 1.3) * noiseFactor2   // Z轴抖动
-           ) * 0.8;  // 抖动幅度
-           
-           // 应用动画偏移
-           pos += offset1 + offset2;
-           
-           // 鼠标交互处理
-           vec3 toMouse = mousePos - pos;  // 从粒子到鼠标的向量
-           float dist = length(toMouse);   // 距离
-           vDistanceToMouse = 0.0;         // 默认无交互
-           float interactionRadius = 30.0; // 交互半径
-           float falloffStart = 5.0;       // 开始衰减的距离
-           
-           // 如果鼠标在交互范围内，粒子会被排斥
-           if (dist < interactionRadius) {
-             float influence = smoothstep(interactionRadius, falloffStart, dist);  // 平滑的交互强度
-             vec3 repelDir = normalize(pos - mousePos);  // 排斥方向（远离鼠标）
-             pos += repelDir * influence * 15.0;         // 应用排斥力
-             vDistanceToMouse = influence;               // 传递交互强度到片段着色器
-           }
-           
-           // 计算最终位置和大小
-           vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);  // 模型视图变换
-           gl_Position = projectionMatrix * mvPosition;         // 投影变换
-           float perspectiveFactor = 700.0 / -mvPosition.z;     // 透视因子（距离越远粒子越小）
-           gl_PointSize = size * perspectiveFactor * (1.0 + vDistanceToMouse * 0.5);  // 最终大小（交互时变大）
-         }
-       `,
-             // 片段着色器 - 处理粒子的颜色、形状和视觉效果
-       fragmentShader: `
-         // 统一变量
-         uniform float time;          // 时间变量（用于动画）
-         uniform float opacity;       // 透明度变量
-         
-         // 从顶点着色器传来的变量
-         varying vec3 vColor;         // 粒子颜色
-         varying float vDistanceToMouse; // 到鼠标的距离（交互强度）
-         varying float vType;         // 粒子类型（0, 1, 2）
-         varying float vIndex;        // 粒子索引
-         
-         // RGB转HSL颜色空间转换函数
-         // 输入：RGB颜色 (0-1)，输出：HSL颜色 (色相, 饱和度, 亮度)
-         vec3 rgb2hsl(vec3 c) {
-           vec4 K = vec4(0.0, -1.0 / 3.0, 2.0 / 3.0, -1.0);
-           vec4 p = mix(vec4(c.bg, K.wz), vec4(c.gb, K.xy), step(c.b, c.g));
-           vec4 q = mix(vec4(p.xyw, c.r), vec4(c.r, p.yzx), step(p.x, c.r));
-           float d = q.x - min(q.w, q.y);
-           float e = 1.0e-10;
-           return vec3(abs(q.z + (q.w - q.y) / (6.0 * d + e)), d / (q.x + e), q.x);
-         }
-         
-         // HSL转RGB颜色空间转换函数
-         // 输入：HSL颜色，输出：RGB颜色 (0-1)
-         vec3 hsl2rgb(vec3 c) {
-           vec4 K = vec4(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);
-           vec3 p = abs(fract(c.xxx + K.xyz) * 6.0 - K.www);
-           return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);
-         }
-         
-         void main() {
-           // 计算当前像素在粒子内的相对位置（-1到1范围）
-           vec2 uv = gl_PointCoord * 2.0 - 1.0;
-           float dist = length(uv);  // 到粒子中心的距离
-           
-           // 如果像素在粒子范围外，则丢弃（不渲染）
-           if (dist > 1.0) {
-             discard;
-           }
-           
-           // 初始化透明度和基础颜色
-           float alpha = 0.0;
-           vec3 baseColor = vColor;
-           
-           // 颜色动画：在HSL空间中轻微调整色相
-           vec3 hsl = rgb2hsl(baseColor);
-           float hueShift = sin(time * 0.05 + vIndex * 0.001) * 0.02;  // 色相偏移
-           hsl.x = fract(hsl.x + hueShift);  // 确保色相在0-1范围内
-           baseColor = hsl2rgb(hsl);  // 转换回RGB
-           vec3 finalColor = baseColor;
-           
-           // 根据粒子类型渲染不同的形状
-           if (vType < 0.5) {
-             // 类型0：实心粒子（带光晕）
-             float core = smoothstep(0.2, 0.15, dist) * 0.9;  // 实心核心
-             float glow = pow(max(0.0, 1.0 - dist), 3.0) * 0.5;  // 外发光
-             alpha = core + glow;
-           }
-           else if (vType < 1.5) {
-             // 类型1：环形粒子
-             float ringWidth = 0.1;    // 环的宽度
-             float ringCenter = 0.65;  // 环的中心位置
-             // 使用高斯函数创建环形
-             float ringShape = exp(-pow(dist - ringCenter, 2.0) / (2.0 * ringWidth * ringWidth));
-             alpha = smoothstep(0.1, 0.5, ringShape) * 0.8;  // 主环
-             alpha += smoothstep(0.3, 0.0, dist) * 0.1;      // 中心小点
-           }
-           else {
-             // 类型2：脉冲粒子
-             float pulse = sin(dist * 5.0 - time * 2.0 + vIndex * 0.1) * 0.1 + 0.9;  // 脉冲效果
-             alpha = pow(max(0.0, 1.0 - dist), 2.5) * pulse * 0.9;  // 基础形状 + 脉冲
-           }
-           
-           // 鼠标交互效果：靠近鼠标时粒子变亮
-           finalColor = mix(finalColor, finalColor * 1.3 + 0.1, vDistanceToMouse * 1.0);
-           
-           // 应用全局透明度
-           alpha *= opacity;  // 使用统一变量控制透明度
-           alpha = clamp(alpha, 0.0, 1.0);  // 确保透明度在有效范围内
-           
-           // 输出最终颜色
-           gl_FragColor = vec4(finalColor * alpha, alpha);
-         }
-       `,
-             // 材质属性设置
-       transparent: true,                    // 启用透明度
-       depthWrite: false,                    // 禁用深度写入（避免透明物体排序问题）
-       blending: THREE.AdditiveBlending,     // 使用加法混合模式（增强光效）
-       vertexColors: true                    // 启用顶点颜色
-    })
-  
-    return new THREE.Points(geometry, material)
   }
+}
+
+// ===== 本地状态变量（保留原有定义） =====
+const gapSizeMultiplier = ref(0.0)  // 间隙倍数，从0开始
+const cubeSizeMultiplier = ref(60.0)  // 大正方体边长倍数
+const opacityMultiplier = ref(0.9)  // 粒子透明度倍数
+
+// ===== Three.js 核心变量 =====
+let scene, camera, renderer, particles         // Three.js 核心对象
+let composer                                   // 后处理效果组合器
+let time = 0                                   // 动画时间计数器
+
+// ===== 常量定义（必须先声明） =====
+const initialRotationX = Math.PI / 4                 // 初始角度（45度）
+const initialRotationY = Math.PI / 6                 // 初始角度（30度）
+const rotationSpeed = 0.1                            // 旋转速度
+const baseRadius = 100                               // 相机距离
+const particleCount = 25000                          // 粒子数量
+
+// ===== 响应式事件状态 =====
+const currentRotationX = ref(initialRotationX)              // 当前旋转角度
+const currentRotationY = ref(initialRotationY)               
+const targetRotationX = ref(initialRotationX)               // 目标旋转角度
+const targetRotationY = ref(initialRotationY)
+
+// ===== 鼠标交互变量 =====
+const screenMouse = ref(new THREE.Vector2(10000, 10000))  // 屏幕鼠标坐标
+const worldMouse = ref(new THREE.Vector3())               // 3D世界鼠标坐标
+
+
+
+//  生成立方体网格位置 - 将粒子排列成魔方的形状
+function createGrid(i, count) {
+  // 计算立方体的边长（向上取整确保能容纳所有粒子）
+  const sideLength = Math.ceil(Math.cbrt(count))  // 25000 -> 29
   
-  // ===== 场景初始化 =====
-  /**
-   * 初始化Three.js场景 - 设置场景、相机、渲染器和后处理效果
-   * 功能：
-   * 1. 创建Three.js核心对象（场景、相机、渲染器）
-   * 2. 配置渲染器和相机参数
-   * 3. 设置后处理效果（泛光等）
-   * 4. 创建并添加粒子系统
-   */
-  function init() {
-    // 创建场景
-    scene = new THREE.Scene()
+  // 计算网格间距（总网格大小使用动态值）
+  const spacing = cubeSizeMultiplier.value / sideLength
+  
+  // 计算网格中心偏移量，使网格中心对齐到原点
+  const halfGrid = (sideLength - 1) * spacing / 2
+  
+  // 将粒子索引转换为3D网格坐标
+  const iz = Math.floor(i / (sideLength * sideLength))  // Z层索引（最外层）
+  const iy = Math.floor((i % (sideLength * sideLength)) / sideLength)  // Y行索引（中间层）
+  const ix = i % sideLength  // X列索引（最内层）
+  
+  // 魔方效果：将29x29x29的网格分成27个小块
+  const cubeSize = Math.ceil(sideLength / 3)  // 每个小块的边长 = 10 (29/3向上取整)
+  const gapSize = Math.max(0, gapSizeMultiplier.value)  // 使用固定的间隙大小，不受spacing影响，确保不小于0
+  
+  // 计算当前粒子属于哪个小块 (0-26)
+  const cubeZ = Math.floor(iz / cubeSize)  // 小块在Z方向的位置 (0,1,2)
+  const cubeY = Math.floor(iy / cubeSize)  // 小块在Y方向的位置 (0,1,2)
+  const cubeX = Math.floor(ix / cubeSize)  // 小块在X方向的位置 (0,1,2)
+  
+  // 计算粒子在小块内的相对位置
+  const localZ = iz % cubeSize  // 粒子在小块内的Z位置
+  const localY = iy % cubeSize  // 粒子在小块内的Y位置
+  const localX = ix % cubeSize  // 粒子在小块内的X位置
+  
+  // 计算小块的中心位置（让整个魔方以原点为中心）
+  const cubeCenterX = (cubeX - 1) * (cubeSize * spacing + gapSize)
+  const cubeCenterY = (cubeY - 1) * (cubeSize * spacing + gapSize)
+  const cubeCenterZ = (cubeZ - 1) * (cubeSize * spacing + gapSize)
+  
+  // 计算粒子在小块内的相对位置（相对于小块中心）
+  const localOffsetX = (localX - (cubeSize - 1) / 2) * spacing
+  const localOffsetY = (localY - (cubeSize - 1) / 2) * spacing
+  const localOffsetZ = (localZ - (cubeSize - 1) / 2) * spacing
+  
+  // 最终位置 = 小块中心位置 + 粒子在小块内的相对位置
+  const finalX = cubeCenterX + localOffsetX
+  const finalY = cubeCenterY + localOffsetY
+  const finalZ = cubeCenterZ + localOffsetZ
+  
+  return new THREE.Vector3(finalX, finalY, finalZ)
+}
+
+// 蓝色系颜色调色板 - 用于粒子颜色变化
+const colorPalette = [
+  new THREE.Color(0x0077ff),  // 深蓝色
+  new THREE.Color(0x00aaff),  // 中蓝色
+  new THREE.Color(0x44ccff),  // 浅蓝色
+  new THREE.Color(0x0055cc)   // 深蓝紫色
+]
+
+// ===== 粒子系统创建 =====
+function createParticleSystem() {
+  // 创建几何体
+  const geometry = new THREE.BufferGeometry()
+  
+  // 创建数据数组
+  const positions = new Float32Array(particleCount * 3)  // 位置数据 (x, y, z)
+  const colors = new Float32Array(particleCount * 3)     // 颜色数据 (r, g, b)
+  const sizes = new Float32Array(particleCount)          // 大小数据
+  const indices = new Float32Array(particleCount)        // 索引数据（用于动画）
+  const particleTypes = new Float32Array(particleCount)  // 粒子类型（用于不同渲染效果）
+  
+  // 为每个粒子生成数据
+  for (let i = 0; i < particleCount; i++) {
+    indices[i] = i  // 粒子索引（用于动画计算）
+    particleTypes[i] = Math.floor(Math.random() * 3)  // 随机分配粒子类型（0, 1, 2）
     
-    // 创建透视相机
-    // 参数：视野角度(75°), 宽高比, 近裁剪面(0.1), 远裁剪面(1000)
-    camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000)
+    // 根据网格分布函数计算粒子位置
+    const pos = createGrid(i, particleCount)
+    positions[i * 3] = pos.x     // X坐标
+    positions[i * 3 + 1] = pos.y // Y坐标
+    positions[i * 3 + 2] = pos.z // Z坐标
+
+    // 为粒子分配颜色（从调色板中随机选择并添加变化）
+    const colorIndex = Math.floor(Math.random() * colorPalette.length)
+    const baseColor = colorPalette[colorIndex]
+    const variation = 0.85 + Math.random() * 0.3  // 颜色变化范围 [0.85, 1.15]
+    const finalColor = baseColor.clone().multiplyScalar(variation)
     
-    // 设置初始旋转角度
-    currentRotationX = initialRotationX
-    currentRotationY = initialRotationY
-    targetRotationX = initialRotationX
-    targetRotationY = initialRotationY
+    // 存储颜色数据
+    colors[i * 3] = finalColor.r
+    colors[i * 3 + 1] = finalColor.g
+    colors[i * 3 + 2] = finalColor.b
     
-    // 根据初始角度设置相机位置
-    camera.position.x = Math.sin(currentRotationX) * Math.cos(currentRotationY) * baseRadius
-    camera.position.y = Math.sin(currentRotationY) * baseRadius
-    camera.position.z = Math.cos(currentRotationX) * Math.cos(currentRotationY) * baseRadius
-    camera.lookAt(0, 0, 0)  // 相机始终看向原点
-    
-    // 创建WebGL渲染器
-    renderer = new THREE.WebGLRenderer({ 
-      antialias: true,  // 启用抗锯齿
-      alpha: true       // 启用透明度
-    })
-    renderer.setSize(window.innerWidth, window.innerHeight)  // 设置渲染尺寸
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))  // 设置像素比（限制最大值为2）
-    renderer.setClearColor(0x000000, 0)  // 设置背景色（透明）
-    
-    // 将渲染器的canvas添加到DOM容器
-    container.value.appendChild(renderer.domElement)
-    
-    // 创建后处理效果组合器
-    composer = new EffectComposer(renderer)
-    
-    // 添加基础渲染通道
-    const renderPass = new RenderPass(scene, camera)
-    composer.addPass(renderPass)
-    
-    // ===== 后处理效果配置 =====
-    // 创建泛光效果（模拟真实的光晕和发光效果）
-    const bloomPass = new UnrealBloomPass(
-      new THREE.Vector2(window.innerWidth, window.innerHeight),  // 渲染尺寸
-      0.25,  // 泛光强度 - 控制整体亮度，值越大越亮
-      0.3,   // 泛光半径 - 控制光晕扩散范围
-      0.65   // 泛光阈值 - 控制哪些像素产生泛光，值越大泛光越少
-    )
-    composer.addPass(bloomPass)
-    
-    // 添加输出通道（处理最终的颜色空间转换）
-    const outputPass = new OutputPass()
-    composer.addPass(outputPass)
-    
-    // 创建粒子系统（移除星空背景）
-    particles = createParticleSystem()
-    scene.add(particles)
-    
-    // 设置初始模式名称
-    updatePatternName(patternNames[0], true)
+    // 为粒子分配大小（随机大小范围 [1.0, 2.5]）
+    sizes[i] = 1.0 + Math.random() * 1.5
   }
+
+  // 将数据绑定到几何体属性
+  geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3))    // 位置属性
+  geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3))         // 颜色属性
+  geometry.setAttribute('size', new THREE.BufferAttribute(sizes, 1))           // 大小属性
+  geometry.setAttribute('index', new THREE.BufferAttribute(indices, 1))        // 索引属性
+  geometry.setAttribute('particleType', new THREE.BufferAttribute(particleTypes, 1))  // 类型属性
+  geometry.userData.currentColors = new Float32Array(colors)  // 存储当前颜色数据（用于后续更新）
   
-  // ===== 窗口响应式处理 =====
-  /**
-   * 窗口大小调整处理 - 更新相机和渲染器尺寸
-   */
-  function onWindowResize() {
+  // 计算几何体的边界框，用于动态平面检测
+  geometry.computeBoundingBox()
+
+  // 创建粒子着色器材质
+  const material = new THREE.ShaderMaterial({
+    // 着色器统一变量
+    uniforms: {
+      time: { value: 0 },                                    // 时间变量（用于动画）
+      mousePos: { value: new THREE.Vector3(10000, 10000, 0) }, // 鼠标位置（初始值远离屏幕）
+      opacity: { value: opacityMultiplier.value }                  // 添加透明度统一变量
+    },
+            // 顶点着色器 - 处理粒子的位置、动画和交互
+      vertexShader: `
+        // 统一变量（从JavaScript传入）
+        uniform float time;        // 时间变量（用于动画）
+        uniform vec3 mousePos;     // 鼠标在3D空间中的位置
+        
+        // 属性变量（每个粒子独有的数据）
+        attribute float size;       // 粒子大小
+        attribute float index;      // 粒子索引（用于动画计算）
+        attribute float particleType; // 粒子类型（0, 1, 2，用于不同渲染效果）
+        
+        // 传递给片段着色器的变量
+        varying vec3 vColor;        // 粒子颜色
+        varying float vDistanceToMouse; // 粒子到鼠标的距离（用于交互效果）
+        varying float vType;        // 粒子类型
+        varying float vIndex;       // 粒子索引
+        
+        // 伪随机数生成函数（用于噪声效果）
+        // 输入：2D坐标，输出：0-1之间的随机数
+        float rand(vec2 co) {
+          return fract(sin(dot(co.xy ,vec2(12.9898,78.233))) * 43758.5453);
+        }
+        
+        void main() {
+          // 传递数据到片段着色器
+          vColor = color;
+          vType = particleType;
+          vIndex = index;
+          
+          // 获取粒子原始位置
+          vec3 pos = position;
+          
+          // 时间参数（控制动画速度）
+          float T = time * 0.5;
+          float idx = index * 0.01;  // 粒子索引归一化
+          
+          // 第一层噪声动画 - 创建波浪般的运动
+          float noiseFactor1 = sin(idx * 30.0 + T * 15.0) * 0.4 + 0.6;  // 噪声因子 [0.2, 1.0]
+          vec3 offset1 = vec3(
+            cos(T * 1.2 + idx * 5.0) * noiseFactor1,  // X轴偏移
+            sin(T * 0.9 + idx * 6.0) * noiseFactor1,  // Y轴偏移
+            cos(T * 1.1 + idx * 7.0) * noiseFactor1   // Z轴偏移
+          ) * 0.4;  // 偏移幅度
+          
+          // 第二层噪声动画 - 创建更细微的抖动
+          float noiseFactor2 = rand(vec2(idx, idx * 0.5)) * 0.5 + 0.5;  // 随机噪声因子
+          float speedFactor = 0.3;  // 速度因子（控制动画速度）
+          vec3 offset2 = vec3(
+            sin(T * speedFactor * 1.3 + idx * 1.1) * noiseFactor2,  // X轴抖动
+            cos(T * speedFactor * 1.7 + idx * 1.2) * noiseFactor2,  // Y轴抖动
+            sin(T * speedFactor * 1.1 + idx * 1.3) * noiseFactor2   // Z轴抖动
+          ) * 0.8;  // 抖动幅度
+          
+          // 应用动画偏移
+          pos += offset1 + offset2;
+          
+          // 鼠标交互处理
+          vec3 toMouse = mousePos - pos;  // 从粒子到鼠标的向量
+          float dist = length(toMouse);   // 距离
+          vDistanceToMouse = 0.0;         // 默认无交互
+          float interactionRadius = 30.0; // 交互半径
+          float falloffStart = 5.0;       // 开始衰减的距离
+          
+          // 如果鼠标在交互范围内，粒子会被排斥
+          if (dist < interactionRadius) {
+            float influence = smoothstep(interactionRadius, falloffStart, dist);  // 平滑的交互强度
+            vec3 repelDir = normalize(pos - mousePos);  // 排斥方向（远离鼠标）
+            pos += repelDir * influence * 15.0;         // 应用排斥力
+            vDistanceToMouse = influence;               // 传递交互强度到片段着色器
+          }
+          
+          // 计算最终位置和大小
+          vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);  // 模型视图变换
+          gl_Position = projectionMatrix * mvPosition;         // 投影变换
+          float perspectiveFactor = 700.0 / -mvPosition.z;     // 透视因子（距离越远粒子越小）
+          gl_PointSize = size * perspectiveFactor * (1.0 + vDistanceToMouse * 0.5);  // 最终大小（交互时变大）
+        }
+      `,
+            // 片段着色器 - 处理粒子的颜色、形状和视觉效果
+      fragmentShader: `
+        // 统一变量
+        uniform float time;          // 时间变量（用于动画）
+        uniform float opacity;       // 透明度变量
+        
+        // 从顶点着色器传来的变量
+        varying vec3 vColor;         // 粒子颜色
+        varying float vDistanceToMouse; // 到鼠标的距离（交互强度）
+        varying float vType;         // 粒子类型（0, 1, 2）
+        varying float vIndex;        // 粒子索引
+        
+        // RGB转HSL颜色空间转换函数
+        // 输入：RGB颜色 (0-1)，输出：HSL颜色 (色相, 饱和度, 亮度)
+        vec3 rgb2hsl(vec3 c) {
+          vec4 K = vec4(0.0, -1.0 / 3.0, 2.0 / 3.0, -1.0);
+          vec4 p = mix(vec4(c.bg, K.wz), vec4(c.gb, K.xy), step(c.b, c.g));
+          vec4 q = mix(vec4(p.xyw, c.r), vec4(c.r, p.yzx), step(p.x, c.r));
+          float d = q.x - min(q.w, q.y);
+          float e = 1.0e-10;
+          return vec3(abs(q.z + (q.w - q.y) / (6.0 * d + e)), d / (q.x + e), q.x);
+        }
+        
+        // HSL转RGB颜色空间转换函数
+        // 输入：HSL颜色，输出：RGB颜色 (0-1)
+        vec3 hsl2rgb(vec3 c) {
+          vec4 K = vec4(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);
+          vec3 p = abs(fract(c.xxx + K.xyz) * 6.0 - K.www);
+          return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);
+        }
+        
+        void main() {
+          // 计算当前像素在粒子内的相对位置（-1到1范围）
+          vec2 uv = gl_PointCoord * 2.0 - 1.0;
+          float dist = length(uv);  // 到粒子中心的距离
+          
+          // 如果像素在粒子范围外，则丢弃（不渲染）
+          if (dist > 1.0) {
+            discard;
+          }
+          
+          // 初始化透明度和基础颜色
+          float alpha = 0.0;
+          vec3 baseColor = vColor;
+          
+          // 颜色动画：在HSL空间中轻微调整色相
+          vec3 hsl = rgb2hsl(baseColor);
+          float hueShift = sin(time * 0.05 + vIndex * 0.001) * 0.02;  // 色相偏移
+          hsl.x = fract(hsl.x + hueShift);  // 确保色相在0-1范围内
+          baseColor = hsl2rgb(hsl);  // 转换回RGB
+          vec3 finalColor = baseColor;
+          
+          // 根据粒子类型渲染不同的形状
+          if (vType < 0.5) {
+            // 类型0：实心粒子（带光晕）
+            float core = smoothstep(0.2, 0.15, dist) * 0.9;  // 实心核心
+            float glow = pow(max(0.0, 1.0 - dist), 3.0) * 0.5;  // 外发光
+            alpha = core + glow;
+          }
+          else if (vType < 1.5) {
+            // 类型1：环形粒子
+            float ringWidth = 0.1;    // 环的宽度
+            float ringCenter = 0.65;  // 环的中心位置
+            // 使用高斯函数创建环形
+            float ringShape = exp(-pow(dist - ringCenter, 2.0) / (2.0 * ringWidth * ringWidth));
+            alpha = smoothstep(0.1, 0.5, ringShape) * 0.8;  // 主环
+            alpha += smoothstep(0.3, 0.0, dist) * 0.1;      // 中心小点
+          }
+          else {
+            // 类型2：脉冲粒子
+            float pulse = sin(dist * 5.0 - time * 2.0 + vIndex * 0.1) * 0.1 + 0.9;  // 脉冲效果
+            alpha = pow(max(0.0, 1.0 - dist), 2.5) * pulse * 0.9;  // 基础形状 + 脉冲
+          }
+          
+          // 鼠标交互效果：靠近鼠标时粒子变亮
+          finalColor = mix(finalColor, finalColor * 1.3 + 0.1, vDistanceToMouse * 1.0);
+          
+          // 应用全局透明度
+          alpha *= opacity;  // 使用统一变量控制透明度
+          alpha = clamp(alpha, 0.0, 1.0);  // 确保透明度在有效范围内
+          
+          // 输出最终颜色
+          gl_FragColor = vec4(finalColor * alpha, alpha);
+        }
+      `,
+            // 材质属性设置
+      transparent: true,                    // 启用透明度
+      depthWrite: false,                    // 禁用深度写入（避免透明物体排序问题）
+      blending: THREE.AdditiveBlending,     // 使用加法混合模式（增强光效）
+      vertexColors: true                    // 启用顶点颜色
+  })
+
+  return new THREE.Points(geometry, material)
+}
+
+// ===== Three.js 初始化 =====
+function init() {
+  // 创建场景
+  scene = new THREE.Scene()
+  
+  // 创建透视相机
+  // 参数：视野角度(75°), 宽高比, 近裁剪面(0.1), 远裁剪面(1000)
+  camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000)
+  
+  // 设置初始旋转角度
+  currentRotationX.value = initialRotationX
+  currentRotationY.value = initialRotationY
+  targetRotationX.value = initialRotationX
+  targetRotationY.value = initialRotationY
+  
+  // 根据初始角度设置相机位置
+  camera.position.x = Math.sin(currentRotationX.value) * Math.cos(currentRotationY.value) * baseRadius
+  camera.position.y = Math.sin(currentRotationY.value) * baseRadius
+  camera.position.z = Math.cos(currentRotationX.value) * Math.cos(currentRotationY.value) * baseRadius
+  camera.lookAt(0, 0, 0)  // 相机始终看向原点
+  
+  // 创建WebGL渲染器
+  renderer = new THREE.WebGLRenderer({ 
+    antialias: true,  // 启用抗锯齿
+    alpha: true       // 启用透明度
+  })
+  renderer.setSize(window.innerWidth, window.innerHeight)  // 设置渲染尺寸
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))  // 设置像素比（限制最大值为2）
+  renderer.setClearColor(0x000000, 0)  // 设置背景色（透明）
+  
+  // 将渲染器的canvas添加到DOM容器
+  container.value.appendChild(renderer.domElement)
+  
+  // 创建后处理效果组合器
+  composer = new EffectComposer(renderer)
+  
+  // 添加基础渲染通道
+  const renderPass = new RenderPass(scene, camera)
+  composer.addPass(renderPass)
+  
+  // 添加泛光效果
+  const bloomPass = new UnrealBloomPass(
+    new THREE.Vector2(window.innerWidth, window.innerHeight),
+    0.25,  // 泛光强度
+    0.3,   // 泛光半径
+    0.65   // 泛光阈值
+  )
+  composer.addPass(bloomPass)
+  
+  // 添加输出通道（处理最终的颜色空间转换）
+  const outputPass = new OutputPass()
+  composer.addPass(outputPass)
+  
+  // 创建并添加粒子系统
+  particles = createParticleSystem()
+  scene.add(particles)
+}
+
+// 更新鼠标坐标
+function updateScreenMouse(clientX, clientY) {
+  screenMouse.value.x = -(clientX / window.innerWidth) * 2 + 1
+  screenMouse.value.y = -(clientY / window.innerHeight) * 2 + 1
+}
+
+// ===== 事件处理函数 =====
+const handleResize = () => {
+  if (camera && renderer && composer) {
     camera.aspect = window.innerWidth / window.innerHeight
     camera.updateProjectionMatrix()
     renderer.setSize(window.innerWidth, window.innerHeight)
     composer.setSize(window.innerWidth, window.innerHeight)
   }
+}
+
+// 简化的渲染循环 - 只负责基础渲染
+function renderLoop(delta) {
+  time += delta * 0.001
   
-  // ===== 交互事件处理 =====
-  /**
-   * 更新屏幕鼠标坐标 - 将屏幕坐标转换为标准化坐标
-   * @param {number} clientX - 鼠标X坐标
-   * @param {number} clientY - 鼠标Y坐标
-   */
-  function updateScreenMouse(clientX, clientY) {
-    screenMouse.x = -(clientX / window.innerWidth) * 2 + 1  // X轴也取反，与Y轴保持一致
-    screenMouse.y = -(clientY / window.innerHeight) * 2 + 1
+  // 基础渲染更新
+  if (particles && particles.material) {
+    particles.material.uniforms.time.value = time
+    updateMouseInteraction()
   }
   
-  function onMouseMove(event) {
+  updateCameraRotation()
+  composer.render()
+}
+
+// 鼠标交互处理 - 使用动态辅助平面，始终垂直于相机
+function updateMouseInteraction() {
+  camera.updateMatrixWorld()
+  const raycaster = new THREE.Raycaster()
+  raycaster.setFromCamera(screenMouse.value, camera)
+  
+  // 获取粒子系统中心
+  const particleCenter = new THREE.Vector3()
+
+  particles.geometry.boundingBox.getCenter(particleCenter)
+
+  
+  // 创建动态平面：始终垂直于相机视线，通过粒子中心
+  const cameraDirection = new THREE.Vector3()
+  camera.getWorldDirection(cameraDirection)
+  const dynamicPlane = new THREE.Plane(cameraDirection, -cameraDirection.dot(particleCenter))
+  
+  // 射线与动态平面求交，获得准确的3D交点
+  if (raycaster.ray.intersectPlane(dynamicPlane, worldMouse.value)) {
+    particles.material.uniforms.mousePos.value.copy(worldMouse.value)
+  }
+}
+
+// 相机旋转更新
+function updateCameraRotation() {
+  currentRotationX.value += (targetRotationX.value - currentRotationX.value) * rotationSpeed
+  currentRotationY.value += (targetRotationY.value - currentRotationY.value) * rotationSpeed
+  
+  camera.position.x = Math.sin(currentRotationX.value) * Math.cos(currentRotationY.value) * baseRadius
+  camera.position.y = Math.sin(currentRotationY.value) * baseRadius
+  camera.position.z = Math.cos(currentRotationX.value) * Math.cos(currentRotationY.value) * baseRadius
+  camera.lookAt(0, 0, 0)
+}
+
+// 简化的动画系统 - 只负责渲染循环
+const { start: startRenderLoop, stop: stopRenderLoop, destroy: destroyRenderLoop } = useAnimation(renderLoop)
+
+// ===== 事件监听器管理 =====
+function addEventListeners() {
+  // 使用新的 composable 添加窗口事件
+  addWindowListener('resize', handleResize)
+  
+  // 添加鼠标移动监听器（仅用于粒子交互，不处理拖拽）
+  addWindowListener('mousemove', (event) => {
     updateScreenMouse(event.clientX, event.clientY)
-    
-    // 如果鼠标按下，处理旋转
-    if (isMouseDown) {
-      const deltaX = event.clientX - mouseDownPosition.x
-      const deltaY = event.clientY - mouseDownPosition.y
-      
-      // 修正旋转方向：反转deltaX，保持deltaY的符号
-      targetRotationX -= deltaX * 0.01  // 水平旋转（反转方向）
-      targetRotationY += deltaY * 0.01  // 垂直旋转（保持原方向）
-      
-      // 限制垂直旋转范围，防止相机翻转
-      targetRotationY = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, targetRotationY))
-      
-      // 更新鼠标按下位置
-      mouseDownPosition.set(event.clientX, event.clientY)
-    }
-  }
-  
-  function onMouseDown(event) {
-    // 只响应左键
-    if (event.button === 0) {
-      isMouseDown = true
-      mouseDownPosition.set(event.clientX, event.clientY)
-    }
-  }
-  
-  function onMouseUp(event) {
-    // 只响应左键
-    if (event.button === 0) {
-      isMouseDown = false
-    }
-  }
-  
-  function onTouchMove(event) {
-    event.preventDefault()
-    if (event.touches.length > 0) {
-      updateScreenMouse(event.touches[0].clientX, event.touches[0].clientY)
-    }
-  }
-  
-  function onTouchStart(event) {
-    event.preventDefault()
-    if (event.touches.length > 0) {
-      isMouseDown = true
-      mouseDownPosition.set(event.touches[0].clientX, event.touches[0].clientY)
-    }
-  }
-  
-  function onTouchEnd(event) {
-    event.preventDefault()
-    isMouseDown = false
-  }
-  
-  // ===== 模式切换系统 =====
-  /**
-   *  触发粒子形态变换
-   */
-  function forcePatternChange() {
-    // 只有一个模式，不需要切换
-    return
-  }
-  
-  function updatePatternName(name, instant = false) {
-    currentPatternName.value = name
-    if (instant) {
-      patternNameOpacity.value = 1
-    } else {
-      patternNameOpacity.value = 1
-      setTimeout(() => {
-        patternNameOpacity.value = 0
-      }, 2500)
-    }
-  }
+  })
+}
 
-  function triggerParticleFlyAway() {
-    console.log("triggerParticleFlyAway")
+
+function removeEventListeners() {
+  // 使用新的 composable 清理所有窗口事件
+  cleanupWindowEvents()
+  
+  // 禁用拖拽系统
+  if (dragSystem) {
+    dragSystem.disable()
+    dragSystem = null
+  }
+}
+
+// ===== 生命周期钩子 =====
+
+onMounted(() => {
+  init()
+  // 初始化动画系统
+  animationStore.setTimeline(timeline)
+  
+  // 添加事件监听器
+  addEventListeners()
+  
+  // 开始渲染循环
+  startRenderLoop()
+  
+  // 执行页面初始化动画
+  playInitializationAnimation()
+
+  initDragSystem()
+
+})
+
+onUnmounted(() => {
+  console.log('Begin组件开始销毁和清理资源...')
+  
+  // 清理事件监听器
+  removeEventListeners()
+  
+  // 清理动画store的事件监听器
+  animationStore.off('particleUpdate', () => {})
+  animationStore.off('animationComplete', () => {})
+  
+  // 停止并销毁渲染循环
+  stopRenderLoop()
+  destroyRenderLoop()
+  
+  // 清理动画管理器
+  if (animationManager) {
+    // 移除所有事件监听器
+    animationManager.off && animationManager.off('animationUpdate')
+    animationManager.off && animationManager.off('animationComplete')
+    animationManager.off && animationManager.off('animationStep')
+    
+    // 销毁动画管理器
+    animationManager.destroy && animationManager.destroy()
+    animationManager = null
   }
   
-  // ===== 动画循环系统 =====
-  /**
-   * 动画更新函数 - 处理所有动态效果和交互
-   * 功能：
-   * 1. 更新时间和动画参数
-   * 2. 更新粒子的着色器统一变量
-   * 3. 处理鼠标交互（将2D鼠标坐标转换为3D坐标）
-   * 4. 更新相机位置（手动旋转）
-   * 5. 渲染场景
-   */
-  function animateUpdate(delta) {
-    // 使用精确的delta时间（delta已经是毫秒）
-    time += delta * 0.001
-    
-    // 更新粒子系统
-    if (particles && particles.material) {
-      particles.material.uniforms.time.value = time  // 传递时间给粒子着色器
-      
-      // 鼠标交互处理
-      camera.updateMatrixWorld()  // 更新相机矩阵（确保射线投射正确）
-      const raycaster = new THREE.Raycaster()  // 创建射线投射器
-      raycaster.setFromCamera(screenMouse, camera)  // 从相机发射射线到鼠标位置
-      
-      // 动态平面检测：根据粒子系统的实际位置和相机方向设置平面
-      // 获取粒子系统的中心位置
-      const particleCenter = new THREE.Vector3()
-      particles.geometry.boundingBox?.getCenter(particleCenter)
-      
-      // 如果没有边界框，使用粒子系统的位置
-      if (!particleCenter.x && !particleCenter.y && !particleCenter.z) {
-        particleCenter.copy(particles.position)
-      }
-      
-      // 根据相机方向动态调整平面
-      const cameraDirection = new THREE.Vector3()
-      camera.getWorldDirection(cameraDirection)
-      
-      // 创建垂直于相机方向的平面，通过粒子系统中心
-      const planeNormal = cameraDirection.clone().normalize()
-      const planeDistance = -planeNormal.dot(particleCenter)
-      
-      const dynamicPlane = new THREE.Plane(planeNormal, planeDistance)
-      
-      // 计算射线与动态平面的交点
-      if (raycaster.ray.intersectPlane(dynamicPlane, worldMouse)) {
-        particles.material.uniforms.mousePos.value.copy(worldMouse)
-      } else {
-        // 如果射线与平面不相交，使用备用方法
-        // 创建一个与Z轴平行的平面，通过粒子系统中心
-        const fallbackPlane = new THREE.Plane(new THREE.Vector3(0, 0, 1), -particleCenter.z)
-        raycaster.ray.intersectPlane(fallbackPlane, worldMouse)
-        particles.material.uniforms.mousePos.value.copy(worldMouse)
-      }
+  // 清理粒子系统
+  if (particles) {
+    if (particles.geometry) {
+      particles.geometry.dispose()
     }
-    
-    // ===== 手动旋转相机控制 =====
-    // 平滑插值到目标旋转角度
-    currentRotationX += (targetRotationX - currentRotationX) * rotationSpeed
-    currentRotationY += (targetRotationY - currentRotationY) * rotationSpeed
-    
-    // 计算相机位置（球面坐标转换为笛卡尔坐标）
-    camera.position.x = Math.sin(currentRotationX) * Math.cos(currentRotationY) * baseRadius
-    camera.position.y = Math.sin(currentRotationY) * baseRadius
-    camera.position.z = Math.cos(currentRotationX) * Math.cos(currentRotationY) * baseRadius
-    camera.lookAt(0, 0, 0)  // 相机始终看向原点
-  
-    // 渲染场景（使用后处理效果）
-    composer.render()
+    if (particles.material) {
+      particles.material.dispose()
+    }
+    if (scene) {
+      scene.remove(particles)
+    }
+    particles = null
   }
   
-  // 使用统一的动画系统
-  const { start: startAnim, stop: stopAnim } = useAnimation(animateUpdate)
+  // 清理Three.js资源
+  if (composer) {
+    composer.dispose && composer.dispose()
+    composer = null
+  }
   
-  // 事件监听器
+  if (renderer) {
+    renderer.dispose()
+    renderer.forceContextLoss()
+    renderer = null
+  }
   
-  // 生命周期钩子
-  onMounted(async () => {
-    await nextTick()
-    init()
+  if (container.value && container.value.firstChild) {
+    container.value.removeChild(container.value.firstChild)
+  }
+  
+  // 清理场景和相机
+  if (scene) {
+    scene.clear()
+    scene = null
+  }
+  camera = null
+  
+  console.log('Begin组件资源清理完成')
+})
+
+// ===== 动画控制函数 =====
+function updateParticlePositions(newGapSize) {
+  if (!particles || !particles.geometry) return
+  
+  // 获取位置属性
+  const positionAttribute = particles.geometry.getAttribute('position')
+  if (!positionAttribute) return
+  
+  const positions = positionAttribute.array
+  const sideLength = Math.ceil(Math.cbrt(particleCount))
+  const spacing = cubeSizeMultiplier.value / sideLength
+  const cubeSize = Math.ceil(sideLength / 3)
+  
+  // 更新每个粒子的位置
+  for (let i = 0; i < particleCount; i++) {
+    const iz = Math.floor(i / (sideLength * sideLength))
+    const iy = Math.floor((i % (sideLength * sideLength)) / sideLength)
+    const ix = i % sideLength
     
-    // 初始化store中的时间线
+    // 计算当前粒子属于哪个小块
+    const cubeZ = Math.floor(iz / cubeSize)
+    const cubeY = Math.floor(iy / cubeSize)
+    const cubeX = Math.floor(ix / cubeSize)
+    
+    // 计算粒子在小块内的相对位置
+    const localZ = iz % cubeSize
+    const localY = iy % cubeSize
+    const localX = ix % cubeSize
+    
+    // 计算小块的中心位置
+    const cubeCenterX = (cubeX - 1) * (cubeSize * spacing + newGapSize)
+    const cubeCenterY = (cubeY - 1) * (cubeSize * spacing + newGapSize)
+    const cubeCenterZ = (cubeZ - 1) * (cubeSize * spacing + newGapSize)
+    
+    // 计算粒子在小块内的相对位置
+    const localOffsetX = (localX - (cubeSize - 1) / 2) * spacing
+    const localOffsetY = (localY - (cubeSize - 1) / 2) * spacing
+    const localOffsetZ = (localZ - (cubeSize - 1) / 2) * spacing
+    
+    // 最终位置
+    const finalX = cubeCenterX + localOffsetX
+    const finalY = cubeCenterY + localOffsetY
+    const finalZ = cubeCenterZ + localOffsetZ
+    
+    // 更新位置数组
+    positions[i * 3] = finalX
+    positions[i * 3 + 1] = finalY
+    positions[i * 3 + 2] = finalZ
+  }
+  
+  // 标记位置属性需要更新
+  positionAttribute.needsUpdate = true
+}
+
+// ===== 动画管理器实例（单例模式）=====
+let animationManager = null
+
+//获取或创建动画管理器实例（单例模式）
+ 
+function getAnimationManager(cubeInstance = null) {
+  if (!animationManager) {
+    // 设置时间线到store
     animationStore.setTimeline(timeline)
     
-    // 开始监听store状态变化
-    watchStoreChanges()
-    
-    // 添加事件监听器
-    window.addEventListener('resize', onWindowResize)
-    window.addEventListener('mousemove', onMouseMove)
-    window.addEventListener('mousedown', onMouseDown)
-    window.addEventListener('mouseup', onMouseUp)
-         // 移除 window.addEventListener('keydown', onKeyDown)
-     window.addEventListener('touchstart', onTouchStart, { passive: false })
-     window.addEventListener('touchmove', onTouchMove, { passive: false })
-     window.addEventListener('touchend', onTouchEnd, { passive: false })
-     
-     // 监听来自CubeDemo的开始动画事件
-     window.addEventListener('startBeginAnimation', handleStartAnimation)
-     
-     // 开始动画
-     startAnim()
-     
-     // 进入页面后立即执行间隙初始化动画
-     setTimeout(() => {
-       startGapInitializationAnimation()
-     }, 100) // 延迟100ms确保场景完全初始化
-  })
-  
-  onUnmounted(() => {
-    // 清理事件监听器
-    window.removeEventListener('resize', onWindowResize)
-    window.removeEventListener('mousemove', onMouseMove)
-    window.removeEventListener('mousedown', onMouseDown)
-    window.removeEventListener('mouseup', onMouseUp)
-    // 移除 window.removeEventListener('keydown', onKeyDown)
-    window.removeEventListener('touchstart', onTouchStart)
-    window.removeEventListener('touchmove', onTouchMove)
-    window.removeEventListener('touchend', onTouchEnd)
-    
-    // 移除开始动画事件监听器
-    window.removeEventListener('startBeginAnimation', handleStartAnimation)
-    
-         // 停止动画
-     stopAnim()
-     
-     // 清理Three.js资源
-     if (renderer) {
-       renderer.dispose()
-     }
-     if (container.value && renderer) {
-       container.value.removeChild(renderer.domElement)
-     }
-  })
-
-  // 处理来自CubeDemo的开始动画事件
-  function handleStartAnimation() {
-    console.log('Begin组件收到开始动画事件')
-    startAnimation()
-    
-    // 通知CubeDemo动画已开始
-    window.dispatchEvent(new CustomEvent('beginAnimationStarted'))
-  }
-
-  // ===== 新的动画控制函数 - 调用store中的方法 =====
-  
-  /**
-   * 更新粒子位置（避免重新创建粒子系统导致的闪烁）
-   * @param {number} newGapSize - 新的间隙大小
-   */
-  function updateParticlePositions(newGapSize) {
-    if (!particles || !particles.geometry) return
-    
-    // 获取位置属性
-    const positionAttribute = particles.geometry.getAttribute('position')
-    if (!positionAttribute) return
-    
-    const positions = positionAttribute.array
-    const sideLength = Math.ceil(Math.cbrt(particleCount))
-    const spacing = cubeSizeMultiplier.value / sideLength
-    const cubeSize = Math.ceil(sideLength / 3)
-    
-    // 更新每个粒子的位置
-    for (let i = 0; i < particleCount; i++) {
-      const iz = Math.floor(i / (sideLength * sideLength))
-      const iy = Math.floor((i % (sideLength * sideLength)) / sideLength)
-      const ix = i % sideLength
-      
-      // 计算当前粒子属于哪个小块
-      const cubeZ = Math.floor(iz / cubeSize)
-      const cubeY = Math.floor(iy / cubeSize)
-      const cubeX = Math.floor(ix / cubeSize)
-      
-      // 计算粒子在小块内的相对位置
-      const localZ = iz % cubeSize
-      const localY = iy % cubeSize
-      const localX = ix % cubeSize
-      
-      // 计算小块的中心位置
-      const cubeCenterX = (cubeX - 1) * (cubeSize * spacing + newGapSize)
-      const cubeCenterY = (cubeY - 1) * (cubeSize * spacing + newGapSize)
-      const cubeCenterZ = (cubeZ - 1) * (cubeSize * spacing + newGapSize)
-      
-      // 计算粒子在小块内的相对位置
-      const localOffsetX = (localX - (cubeSize - 1) / 2) * spacing
-      const localOffsetY = (localY - (cubeSize - 1) / 2) * spacing
-      const localOffsetZ = (localZ - (cubeSize - 1) / 2) * spacing
-      
-      // 最终位置
-      const finalX = cubeCenterX + localOffsetX
-      const finalY = cubeCenterY + localOffsetY
-      const finalZ = cubeCenterZ + localOffsetZ
-      
-      // 更新位置数组
-      positions[i * 3] = finalX
-      positions[i * 3 + 1] = finalY
-      positions[i * 3 + 2] = finalZ
-    }
-    
-    // 标记位置属性需要更新
-    positionAttribute.needsUpdate = true
-  }
-
-  /**
-   * 开始间隙初始化动画 - 进入页面时立即执行
-   */
-  function startGapInitializationAnimation() {
-    console.log('开始间隙初始化动画')
-    
-    // 检查场景是否已初始化
-    if (!scene || !camera || !particles) {
-      console.warn('场景未初始化，无法开始间隙初始化动画')
-      return
-    }
-    
-    // 设置store中的时间线
-    animationStore.setTimeline(timeline)
-    
-    // 创建动画管理器实例并设置到store中
-    const animationManager = new TimelineAnimationManager(
+    // 创建动画管理器实例
+    animationManager = new TimelineAnimationManager(
       timeline, 
       scene, 
       camera, 
       particles, 
       baseRadius, 
       initialRotationX, 
-      initialRotationY
+      initialRotationY,
+      cubeInstance // 可选的魔方实例
     )
     
     // 设置到store中
     animationStore.setAnimationManager(animationManager)
     
-    // 监听粒子更新事件
-    animationStore.on('particleUpdate', (data) => {
-      console.log('间隙初始化动画收到粒子更新事件:', data)
-      // 更新本地变量
-      if (data.gapSizeMultiplier !== undefined) {
-        gapSizeMultiplier.value = data.gapSizeMultiplier
-      }
-      
-      // 不重新创建粒子系统，只更新现有粒子的位置
-      // 这样可以避免闪烁
-      if (particles && particles.geometry) {
-        updateParticlePositions(data.gapSizeMultiplier || 0)
-      }
-    })
-    
-    // 监听动画完成事件，保持动画结束时的最终值
-    animationStore.on('animationComplete', (data) => {
-      console.log('间隙初始化动画完成:', data)
-      // 保持动画结束时的最终间隙值（应该是8）
-      // 不要强制覆盖动画结果
-      console.log('动画完成后的间隙值:', gapSizeMultiplier.value)
-      
-      // 重置时间线，为后续的点击开始按钮动画做准备
-      if (timeline) {
-        timeline.reset()
-      }
-    })
-    
-    // 调用间隙初始化动画方法
-    if (animationManager && animationManager.setupCubeTimeline) {
-      console.log('设置间隙初始化动画时间线')
-      animationManager.setupCubeTimeline()
-      // 启动时间线动画
-      if (timeline) {
-        console.log('启动时间线动画')
-        timeline.play()
-      } else {
-        console.warn('时间线未初始化')
-      }
-    } else {
-      console.warn('动画管理器或setupCubeTimeline方法不存在')
-    }
+    // 统一设置事件监听器
+    setupAnimationEventListeners()
   }
   
-  /**
-   * 开始动画 - 调用store中的动画方法
-   */
-  function startAnimation() {
-    console.log('开始动画函数被调用')
-    
-    // 检查场景是否已初始化
-    if (!scene || !camera || !particles) {
-      console.warn('场景未初始化，无法开始动画')
-      return
-    }
-    
-    console.log('场景已初始化，开始设置动画')
-    
-    // 设置store中的时间线和动画管理器
-    animationStore.setTimeline(timeline)
-    console.log('时间线已设置到store中')
-    
-    // 创建动画管理器实例并设置到store中
-    const animationManager = new TimelineAnimationManager(
-      timeline, 
-      scene, 
-      camera, 
-      particles, 
-      baseRadius, 
-      initialRotationX, 
-      initialRotationY
-    )
-    console.log('动画管理器已创建')
-    
-    // 设置到store中
-    animationStore.setAnimationManager(animationManager)
-    console.log('动画管理器已设置到store中')
-    
-    // 监听store的粒子更新事件
-    animationStore.on('particleUpdate', (data) => {
-      console.log('收到粒子更新事件:', data)
+  // 如果提供了新的魔方实例，更新它
+  if (cubeInstance && animationManager.setCubeInstance) {
+    animationManager.setCubeInstance(cubeInstance)
+  }
+  
+  return animationManager
+}
+
+function setupAnimationEventListeners() {
+  // 监听动画管理器的事件
+  if (animationManager) {
+    // 粒子更新事件
+    animationManager.on('animationUpdate', (data) => {
       // 更新本地变量
       if (data.cubeSizeMultiplier !== undefined) {
         cubeSizeMultiplier.value = data.cubeSizeMultiplier
@@ -959,220 +740,126 @@
           updateParticlePositions(data.gapSizeMultiplier)
         }
         if (data.cubeSizeMultiplier !== undefined) {
-          // 对于立方体大小的变化，我们可能需要重新创建粒子系统
-          // 但为了减少闪烁，我们可以尝试只更新位置
           updateParticlePositions(data.gapSizeMultiplier || gapSizeMultiplier.value)
         }
       }
     })
     
-    // 监听动画完成事件
-    animationStore.on('animationComplete', (data) => {
-      console.log('动画完成:', data)
-      // 可以在这里添加动画完成后的逻辑
+    // 动画完成事件
+    animationManager.on('animationComplete', (data) => {
+      if (timeline) {
+        timeline.reset()
+      }
+      emit('animation-complete')
     })
     
-    // 调用store中的开始动画方法
-    console.log('准备调用store中的startCubeAnimation方法')
-    animationStore.startCubeAnimation()
-    console.log('store中的startCubeAnimation方法调用完成')
+    // 动画步骤事件
+    animationManager.on('animationStep', (data) => {
+      console.log('动画步骤:', data)
+    })
   }
   
-  /**
-   * 暂停动画 - 调用store中的暂停方法
-   */
-  function pauseAnimation() {
-    animationStore.pauseAnimation()
-  }
-  
-  /**
-   * 停止动画 - 调用store中的停止方法
-   */
-  function stopAnimation() {
-    animationStore.stopAnimation()
-  }
-  
-  /**
-   * 重置动画 - 调用store中的重置方法
-   */
-  function resetAnimation() {
-    animationStore.resetAnimation()
-  }
-
-  // 添加更新函数
-  function updateGapSize(newValue) {
-    gapSizeMultiplier.value = newValue
+  // 监听store的事件（保留兼容性）
+  animationStore.on('particleUpdate', (data) => {
+    // 更新本地变量
+    if (data.cubeSizeMultiplier !== undefined) {
+      cubeSizeMultiplier.value = data.cubeSizeMultiplier
+    }
+    if (data.gapSizeMultiplier !== undefined) {
+      gapSizeMultiplier.value = data.gapSizeMultiplier
+    }
     
-    // 同时更新store中的值
-    animationStore.updateGapSize(newValue)
-    
-    // 更新粒子位置而不是重新创建粒子系统
+    // 更新粒子位置以应用新的参数
     if (particles && particles.geometry) {
-      updateParticlePositions(newValue)
+      if (data.gapSizeMultiplier !== undefined) {
+        updateParticlePositions(data.gapSizeMultiplier)
+      }
+      if (data.cubeSizeMultiplier !== undefined) {
+        updateParticlePositions(data.gapSizeMultiplier || gapSizeMultiplier.value)
+      }
     }
-  }
-
-  // 添加大正方体边长更新函数
-  function updateCubeSize(newValue) {
-    cubeSizeMultiplier.value = newValue
-    
-    // 同时更新store中的值
-    animationStore.updateCubeSize(newValue)
-    
-    // 更新粒子位置而不是重新创建粒子系统
-    if (particles && particles.geometry) {
-      updateParticlePositions(gapSizeMultiplier.value)
-    }
-  }
-
-  // 添加透明度更新函数
-  function updateOpacity(newValue) {
-    opacityMultiplier.value = newValue
-    
-    // 同时更新store中的值
-    animationStore.updateOpacity(newValue)
-    
-    // 更新材质中的透明度统一变量
-    if (particles && particles.material) {
-      particles.material.uniforms.opacity.value = newValue
-    }
-  }
-
-  // 移除本地的setupTimeline函数，现在完全使用全局的TimelineAnimationManager
+  })
   
-  // 切换循环播放
-  function toggleLoop() {
-    // 调用store中的循环切换方法
-    animationStore.toggleLoop()
-    
-    // 保留原有的本地逻辑（如果需要的话）
-    const currentLoopState = timeline.getInfo().isLooping
-    console.log(`循环播放已${!currentLoopState ? '开启' : '关闭'}`)
-  }
+  // 监听store的动画完成事件
+  animationStore.on('animationComplete', (data) => {
+    console.log('Store动画完成:', data)
+    // 通知父组件动画已完成
+    emit('animation-complete')
+  })
   
-  // 移除onKeyDown函数
-  </script>
-  
-  <style scoped>
-  /* 主容器样式 - 全屏显示粒子效果 */
-  .particle-container {
-    position: fixed;  /* 固定定位，覆盖整个视口 */
-    width: 100%;     /* 全宽 */
-    height: 100%;    /* 全高 */
-    background: linear-gradient(180deg,
-        #00050a 0%,    /* 顶部深蓝色 */
-        #000a14 50%,   /* 中间稍亮的蓝色 */
-        #001020 100%   /* 底部更亮的蓝色 */
-      );  /* 深蓝色渐变背景，营造太空氛围 */
-    overflow: hidden;  /* 隐藏溢出内容 */
-  }
-  
-  /* 背景光晕效果 - 增强整体氛围 */
-  .glow {
-    position: fixed;  /* 固定定位 */
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    pointer-events: none;  /* 不响应鼠标事件 */
-    background: radial-gradient(circle at 50% 50%,
-        rgba(0, 100, 180, 0.02) 0%,    /* 中心蓝色光晕 */
-        rgba(30, 0, 100, 0.03) 50%,    /* 中间紫色光晕 */
-        transparent 75%                 /* 边缘透明 */
-      );  /* 径向渐变创建光晕效果 */
-    mix-blend-mode: screen;  /* 屏幕混合模式，增强光效 */
-    opacity: 0.5;  /* 整体透明度 */
-  }
-  
-  /* 模式名称显示样式 */
-  #patternName {
-    position: fixed;
-    top: 20px;
-    left: 50%;
-    transform: translateX(-50%);
-    color: white;
-    font-family: sans-serif;
-    font-size: 16px;
-    pointer-events: auto;
-    z-index: 100;
-    transition: opacity 0.5s ease;
-    text-align: center;
-    background-color: rgba(0, 0, 0, 0.4);
-    padding: 8px 18px;
-    border-radius: 25px;
-    text-shadow: 0 0 5px rgba(0, 0, 0, 0.5);
-  }
-  
-  /* 操作提示样式 */
-  #instructions {
-    position: fixed;
-    bottom: 15px;
-    left: 15px;
-    color: rgba(255, 255, 255, 0.7);
-    font-family: sans-serif;
-    font-size: 12px;
-    background-color: rgba(0, 0, 0, 0.3);
-    padding: 5px 10px;
-    border-radius: 3px;
-    z-index: 100;
-    pointer-events: auto;
-    line-height: 1.4;
-  }
+}
 
-  /* 间隙控制器样式 */
-  .gap-controller {
-    position: fixed;
-    top: 20px;
-    right: 20px;
-    background-color: rgba(0, 0, 0, 0.4);
-    padding: 10px;
-    border-radius: 8px;
-    z-index: 100;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-  }
+//执行初始化动画 - 页面加载时的入场效果
+function playInitializationAnimation() {
+  const manager = getAnimationManager()
+  manager.setupInitializationTimeline()
+}
 
-  .gap-controller label {
-    color: white;
-    font-size: 14px;
-    font-family: sans-serif;
-  }
+function startAnimation() {
+  const manager = getAnimationManager()
+  manager.setupUserTriggeredTimeline() 
 
-  .gap-controller input[type="range"] {
-    /* -webkit-appearance: none; */
-    width: 100px;
-    height: 5px;
-    background: rgba(255, 255, 255, 0.3);
-    border-radius: 5px;
-    outline: none;
-    opacity: 0.7;
-  }
+}
 
-  .gap-controller input[type="range"]::-webkit-slider-thumb {
-    -webkit-appearance: none;
-    appearance: none;
-    width: 20px;
-    height: 20px;
-    background: white;
-    cursor: pointer;
-    border-radius: 50%;
-    box-shadow: 0 0 2px rgba(0, 0, 0, 0.2);
-  }
 
-  .gap-controller button {
-    background-color: rgba(255, 255, 255, 0.2);
-    color: white;
-    border: none;
-    padding: 5px 10px;
-    border-radius: 5px;
-    cursor: pointer;
-    font-size: 12px;
-    font-family: sans-serif;
-    transition: background-color 0.3s ease;
-  }
+</script>
 
-  .gap-controller button:hover {
-    background-color: rgba(255, 255, 255, 0.3);
-  }
-  </style> 
+<style scoped>
+/* 主容器样式 - 全屏显示粒子效果 */
+.particle-container {
+  position: fixed;  /* 固定定位，覆盖整个视口 */
+  width: 100%;     /* 全宽 */
+  height: 100%;    /* 全高 */
+  background: linear-gradient(180deg,
+      #00050a 0%,    /* 顶部深蓝色 */
+      #000a14 50%,   /* 中间稍亮的蓝色 */
+      #001020 100%   /* 底部更亮的蓝色 */
+    );  /* 深蓝色渐变背景，营造太空氛围 */
+  overflow: hidden;  /* 隐藏溢出内容 */
+}
+
+/* 背景光晕效果 - 增强整体氛围 */
+.glow {
+  position: fixed;  /* 固定定位 */
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;  /* 不响应鼠标事件 */
+  background: radial-gradient(circle at 50% 50%,
+      rgba(0, 100, 180, 0.02) 0%,    /* 中心蓝色光晕 */
+      rgba(30, 0, 100, 0.03) 50%,    /* 中间紫色光晕 */
+      transparent 75%                 /* 边缘透明 */
+    );  /* 径向渐变创建光晕效果 */
+  mix-blend-mode: screen;  /* 屏幕混合模式，增强光效 */
+  opacity: 0.5;  /* 整体透明度 */
+}
+
+/* 动画控制按钮样式 */
+.animation-controls {
+  position: fixed;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 15px;
+  z-index: 100;
+}
+
+.start-btn {
+  background-color: rgba(255, 255, 255, 0.2);
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 16px;
+  font-family: sans-serif;
+  transition: background-color 0.3s ease;
+  text-shadow: 0 0 3px rgba(0, 0, 0, 0.5);
+}
+
+.start-btn:hover {
+  background-color: rgba(255, 255, 255, 0.3);
+}
+</style> 

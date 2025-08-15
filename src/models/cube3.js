@@ -94,7 +94,7 @@ export function useCube(scene) {
 		edges.length = 0;
 
 		const pieceSize = customPieceSize || cube.geometry.pieceSize;
-		const mainMaterial = new THREE.MeshLambertMaterial({ color: 0x333333 });
+		const mainMaterial = new THREE.MeshLambertMaterial({ color: 0x87CEEB }); // 天蓝色
 
 		const pieceMesh = new THREE.Mesh(
 			new RoundedBoxGeometry(pieceSize, cube.geometry.pieceCornerRadius, 3),
@@ -663,5 +663,9 @@ export function useCube(scene) {
 		updatePieceCornerRadius: cube.updatePieceCornerRadius.bind(cube),
 		updateEdgeCornerRoundness: cube.updateEdgeCornerRoundness.bind(cube),
 		updateEdgeScale: cube.updateEdgeScale.bind(cube),
+
+		// 主体颜色控制 - 使用继承的方法
+		updateMainColor: cube.updateMainColor.bind(cube),
+		getMainColor: cube.getMainColor.bind(cube),
 	};
 }

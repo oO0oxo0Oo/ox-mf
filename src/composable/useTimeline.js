@@ -17,12 +17,12 @@ export function useTimeline() {
     let currentTween = null;
     // 时间线总时长
     let totalDuration = 0;
-    // 回调函数
+    // 回调函数 - 支持多个监听器
     let callbacks = {
-        onStart: null,
-        onUpdate: null,
-        onComplete: null,
-        onStep: null
+        onStart: [],
+        onUpdate: [],
+        onComplete: [],
+        onStep: []
     };
 
     /**
@@ -113,7 +113,7 @@ export function useTimeline() {
         isPlaying = true;
         currentIndex = 0;
         
-        if (callbacks.onStart) callbacks.onStart();
+        callbacks.onStart.forEach(callback => callback && callback());
         
         playNext();
     }
@@ -129,7 +129,7 @@ export function useTimeline() {
 
         const item = timeline[currentIndex];
         
-        if (callbacks.onStep) callbacks.onStep(item, currentIndex);
+        callbacks.onStep.forEach(callback => callback && callback(item, currentIndex));
         
         // 创建Tween动画
         currentTween = useTween({
@@ -137,7 +137,7 @@ export function useTimeline() {
             easing: item.easing || ((t) => t),
             onUpdate: (state) => {
                 item.update(state.value);
-                if (callbacks.onUpdate) callbacks.onUpdate(state, item, currentIndex);
+                callbacks.onUpdate.forEach(callback => callback && callback(state, item, currentIndex));
             },
             onComplete: () => {
                 if (item.onComplete) item.onComplete();
@@ -176,6 +176,11 @@ export function useTimeline() {
         stop();
         timeline = [];
         totalDuration = 0;
+        // 清空所有回调
+        callbacks.onStart = [];
+        callbacks.onUpdate = [];
+        callbacks.onComplete = [];
+        callbacks.onStep = [];
     }
 
     /**
@@ -197,7 +202,7 @@ export function useTimeline() {
         isPlaying = false;
         currentTween = null;
         
-        if (callbacks.onComplete) callbacks.onComplete();
+        callbacks.onComplete.forEach(callback => callback && callback());
         
         if (isLooping) {
             currentIndex = 0;
@@ -214,13 +219,29 @@ export function useTimeline() {
     }
 
     /**
-     * 设置回调函数
+     * 添加回调函数
      * @param {string} type - 回调类型
      * @param {Function} callback - 回调函数
      */
     function on(type, callback) {
-        if (callbacks.hasOwnProperty(type)) {
-            callbacks[type] = callback;
+        const eventType = 'on' + type.charAt(0).toUpperCase() + type.slice(1);
+        if (callbacks.hasOwnProperty(eventType)) {
+            callbacks[eventType].push(callback);
+        }
+    }
+
+    /**
+     * 移除回调函数
+     * @param {string} type - 回调类型
+     * @param {Function} callback - 回调函数
+     */
+    function off(type, callback) {
+        const eventType = 'on' + type.charAt(0).toUpperCase() + type.slice(1);
+        if (callbacks.hasOwnProperty(eventType)) {
+            const index = callbacks[eventType].indexOf(callback);
+            if (index > -1) {
+                callbacks[eventType].splice(index, 1);
+            }
         }
     }
 
@@ -255,6 +276,7 @@ export function useTimeline() {
         seek,
         setLoop,
         on,
+        off,
         getInfo,
         getTimelineItems
     };

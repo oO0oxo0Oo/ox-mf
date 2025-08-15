@@ -168,6 +168,24 @@ export class CubeInterface {
     return this.edges[0]?.visible || false;
   }
 
+  // 更新主体颜色 - 通用实现
+  updateMainColor(newColor) {
+    this.pieces.forEach((piece) => {
+      if (piece.userData.cube && piece.userData.cube.material) {
+        piece.userData.cube.material.color.setHex(newColor);
+      }
+    });
+    return true;
+  }
+
+  // 获取当前主体颜色
+  getMainColor() {
+    if (this.pieces[0] && this.pieces[0].userData.cube && this.pieces[0].userData.cube.material) {
+      return this.pieces[0].userData.cube.material.color.getHex();
+    }
+    return null;
+  }
+
   // 基础方法 - 子类必须实现
   init() {
     throw new Error('init method must be implemented by subclass');
