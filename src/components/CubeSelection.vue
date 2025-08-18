@@ -66,9 +66,12 @@
 
 <script setup>
 import { ref } from 'vue'
+import { useCubeStore } from '../stores/cube'
 
 // 定义组件事件
 const emit = defineEmits(['selection-confirmed'])
+
+const cubeStore = useCubeStore()
 
 // 响应式数据
 const selectedType = ref(null)
@@ -109,9 +112,7 @@ function selectType(typeId) {
 
 // 选择魔方风格
 function selectStyle(styleId) {
-  console.log('选择魔方风格:', styleId)
   selectedStyle.value = styleId
-  console.log('当前选中的风格:', selectedStyle.value)
 }
 
 // 确认选择
@@ -121,6 +122,12 @@ function confirmSelection() {
   const selectedTypeInfo = cubeTypes.value.find(type => type.id === selectedType.value)
   const selectedStyleInfo = cubeStyles.value.find(style => style.id === selectedStyle.value)
 
+  // 直接设置魔方类型和大小
+  cubeStore.setCubeType(selectedType.value)
+  
+  // 验证设置是否成功
+  const currentConfig = cubeStore.getCubeConfig()
+  
   const selectionData = {
     type: selectedType.value,
     style: selectedStyle.value,

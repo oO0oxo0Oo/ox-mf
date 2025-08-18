@@ -1107,7 +1107,6 @@ class Controls {
 				this.edges,
 				false
 			);
-			console.log(edgeIntersect, "2222222222");
 
 			if (edgeIntersect !== false) {
 				this.dragNormal = edgeIntersect.face.normal.round();

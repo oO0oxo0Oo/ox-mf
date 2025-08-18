@@ -66,6 +66,7 @@ export function useCube(scene) {
 		positions.length = 0;
 
 		// 这些位置是块的中心位置，块会紧密排列
+		// 二阶魔方：每个块边长是1/2，所以块的中心在±0.25位置
 		const cornerPositions = [
 			[-0.25, -0.25, -0.25], // 0: 左下后
 			[0.25, -0.25, -0.25], // 1: 右下后
@@ -94,12 +95,12 @@ export function useCube(scene) {
 		});
 	}
 
-	// 生成魔方模型 - 修改为二阶魔方
+	// 生成魔方模型 
 	function generateModel(customPieceSize = null) {
 		pieces.length = 0;
 		edges.length = 0;
 
-		const pieceSize = customPieceSize ;
+		const pieceSize = customPieceSize || cube.geometry.pieceSize;
 		const mainMaterial = new THREE.MeshLambertMaterial({ color: 0x333333 });
 
 		const pieceMesh = new THREE.Mesh(
@@ -172,34 +173,7 @@ export function useCube(scene) {
 		});
 	}
 
-	// 重新生成模型 - 用于动画中的尺寸变化
-	function regenerateModel(customPieceSize = null) {
-		// 清除现有的pieces
-		pieces.forEach(piece => {
-			if (piece.parent) {
-				piece.parent.remove(piece);
-			}
-			// 释放几何体和材质
-			piece.traverse((child) => {
-				if (child.geometry) child.geometry.dispose();
-				if (child.material) {
-					if (Array.isArray(child.material)) {
-						child.material.forEach(mat => mat.dispose());
-					} else {
-						child.material.dispose();
-					}
-				}
-			});
-		});
-
-		// 重新生成模型
-		generateModel(customPieceSize);
-
-		// 重新添加到场景
-		pieces.forEach((piece) => {
-			object.add(piece);
-		});
-	}
+	// 重新生成模型 - 使用继承的方法
 
 	// ========== 从 useControls 移过来的魔方操作方法 ==========
 
@@ -209,7 +183,7 @@ export function useCube(scene) {
 
 		let position = new THREE.Vector3()
 			.setFromMatrixPosition(piece.matrixWorld)
-			.multiplyScalar(4); // 二阶魔方不需要额外缩放
+			.multiplyScalar(4); 
 
 		if (!object || !animator) {
 			return position.round();
@@ -231,7 +205,6 @@ export function useCube(scene) {
 		let axis;
 
 		if (position === false) {
-			// 源码风格：需要外部传入flipAxis和dragIntersectObject
 			if (!flipAxis || !dragIntersectObject) return [];
 			axis = getMainAxis(flipAxis);
 			position = getPiecePosition(dragIntersectObject);
@@ -405,7 +378,7 @@ export function useCube(scene) {
 
 		// 边长控制 - 使用继承的方法
 		updatePieceSize: cube.updatePieceSize.bind(cube),
-		regenerateModel, // 使用自定义的regenerateModel方法
+		regenerateModel: cube.regenerateModel.bind(cube),
 		updatePieceCornerRadius: cube.updatePieceCornerRadius.bind(cube),
 		updateEdgeCornerRoundness: cube.updateEdgeCornerRoundness.bind(cube),
 		updateEdgeScale: cube.updateEdgeScale.bind(cube),

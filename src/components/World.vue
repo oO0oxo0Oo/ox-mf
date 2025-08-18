@@ -45,9 +45,6 @@ onMounted(() => {
     // 创建灯光
     createLights();
 
-    // 场景已准备好，等待魔方初始化
-    console.log('World场景已初始化，等待魔方组件');
-
     resize();
     window.addEventListener('resize', resize);
 

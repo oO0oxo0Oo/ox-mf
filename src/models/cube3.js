@@ -360,41 +360,25 @@ export function useCube(scene) {
 	}
 
 	function getCubeState(){
-		console.log("=== 魔方状态信息 ===");
 		
 		// 生成魔方状态字符串
 		const stateString = getCubeStateString();
-		// console.log(`\n魔方状态字符串: ${stateString}`);
-		// console.log(`长度: ${stateString.length} (应该是54)`);
-		
+
 		// 使用新的getFaceOrientationInfo函数获取详细信息
 		const orientationInfo = getFaceOrientationInfo();
 		
 		orientationInfo.forEach((pieceInfo) => {
-			// console.log(`\n--- 魔方小块 ${pieceInfo.pieceIndex} ---`);
-			// console.log(`位置: (${pieceInfo.position.x}, ${pieceInfo.position.y}, ${pieceInfo.position.z})`);
 			
 			if (pieceInfo.faces.length > 0) {
-				console.log("面的信息:");
 				pieceInfo.faces.forEach((face) => {
-					// console.log(`  ${face.originalName} → ${face.currentOrientation} (${face.displayName}): ${face.color} (0x${face.hexColor.toString(16)})`);
-					// console.log(`    位置: (${face.position.x.toFixed(3)}, ${face.position.y.toFixed(3)}, ${face.position.z.toFixed(3)})`);
-					// console.log(`    旋转: (${face.rotation.x.toFixed(3)}, ${face.rotation.y.toFixed(3)}, ${face.rotation.z.toFixed(3)})`);
-					// console.log(`    世界法向量: (${face.worldNormal.x.toFixed(3)}, ${face.worldNormal.y.toFixed(3)}, ${face.worldNormal.z.toFixed(3)})`);
 				});
 			} else {
 				// console.log("  这是一个中心块，没有彩色面");
 			}
 		});
 		
-		console.log("\n=== 原始数据对比 ===");
 		pieces.forEach((piece, index) => {
 			let piecePosition = getPiecePosition(piece);
-			// console.log(`小块 ${index}:`, {
-			// 	position: piecePosition,
-			// 	edges: piece.userData.edges,
-			// 	childrenCount: piece.children.length
-			// });
 		});
 		
 		// 返回魔方状态字符串
@@ -567,42 +551,7 @@ export function useCube(scene) {
 		}
 	}
 
-	// 只缩放小方块边长，不改变位置
-	function regenerateModel(customPieceSize = null) {
-		const pieceSize = customPieceSize || cube.geometry.pieceSize;
-		
-		// 只更新每个piece的几何体大小
-		pieces.forEach((piece) => {
-			// 更新立方体几何体
-			if (piece.userData.cube) {
-				const newGeometry = new RoundedBoxGeometry(pieceSize, cube.geometry.pieceCornerRadius, 3);
-				piece.userData.cube.geometry.dispose();
-				piece.userData.cube.geometry = newGeometry;
-			}
-			
-			// 更新边缘几何体
-			piece.children.forEach((child) => {
-				if (child.name && ['L', 'R', 'D', 'U', 'B', 'F'].includes(child.name)) {
-					const newEdgeGeometry = RoundedPlaneGeometry(
-						pieceSize,
-						cube.geometry.edgeCornerRoundness,
-						cube.geometry.edgeDepth
-					);
-					child.geometry.dispose();
-					child.geometry = newEdgeGeometry;
-					
-					// 更新边缘位置
-					const distance = pieceSize / 2;
-					const edgeIndex = ['L', 'R', 'D', 'U', 'B', 'F'].indexOf(child.name);
-					child.position.set(
-						distance * [-1, 1, 0, 0, 0, 0][edgeIndex],
-						distance * [0, 0, -1, 1, 0, 0][edgeIndex],
-						distance * [0, 0, 0, 0, -1, 1][edgeIndex]
-					);
-				}
-			});
-		});
-	}
+	// 重新生成模型 - 使用继承的方法
 
 	return {
 		// 状态
@@ -649,7 +598,7 @@ export function useCube(scene) {
 
 		// 边长控制 - 使用继承的方法
 		updatePieceSize: cube.updatePieceSize.bind(cube),
-		regenerateModel,
+		regenerateModel: cube.regenerateModel.bind(cube),
 		updatePieceCornerRadius: cube.updatePieceCornerRadius.bind(cube),
 		updateEdgeCornerRoundness: cube.updateEdgeCornerRoundness.bind(cube),
 		updateEdgeScale: cube.updateEdgeScale.bind(cube),

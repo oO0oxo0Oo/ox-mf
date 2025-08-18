@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { useCubeStore } from './cube.js'
 
 
@@ -37,8 +37,33 @@ export const useAnimationStore = defineStore('animation', () => {
     animationManager: null
   })
   
-  // 事件系统
-  const eventListeners = ref({})
+  // ===== 新增：动画事件状态（替代事件系统） =====
+  const animationEvents = ref({
+    lastUpdate: null,      // 最后一次动画更新数据
+    lastComplete: null,    // 最后一次动画完成数据
+    lastStep: null,        // 最后一次动画步骤数据
+    lastError: null        // 最后一次动画错误数据
+  })
+  
+  // ===== 监听cube store的魔方类型变化 =====
+  watch(() => cubeStore.config.cubeType, (newType) => {
+    updateCubeParamsFromStore({ type: newType })
+  }, { immediate: true })
+  
+  // ===== 同步魔方参数的方法 =====
+  function updateCubeParamsFromStore(cubeConfig) {
+    // 根据魔方类型调整动画参数
+    if (cubeConfig.type === 'cube2') {
+      // 2阶魔方：调整粒子大小和间距
+      particleParams.value.sizeMultiplier = 80  // 2阶魔方块更大
+      particleParams.value.gapMultiplier = 0.1
+    } else if (cubeConfig.type === 'cube3') {
+      // 3阶魔方：标准参数
+      particleParams.value.sizeMultiplier = 60
+      particleParams.value.gapMultiplier = 0
+    }
+
+  }
   
   // ===== 计算属性 =====
   
@@ -60,35 +85,22 @@ export const useAnimationStore = defineStore('animation', () => {
     ...cameraParams.value
   }))
   
-  // ===== 事件管理 =====
-  function on(eventName, listener) {
-    if (!eventListeners.value[eventName]) {
-      eventListeners.value[eventName] = []
-    }
-    eventListeners.value[eventName].push(listener)
-  }
-
-  function off(eventName, listener) {
-    if (eventListeners.value[eventName]) {
-      const index = eventListeners.value[eventName].indexOf(listener)
-      if (index > -1) {
-        eventListeners.value[eventName].splice(index, 1)
-      }
-    }
+  // ===== 新增：事件触发方法（替代emit） =====
+  function triggerAnimationUpdate(data) {
+    animationEvents.value.lastUpdate = { ...data, timestamp: Date.now() }
   }
   
-  function emit(eventName, data) {
-    if (eventListeners.value[eventName]) {
-      eventListeners.value[eventName].forEach(listener => {
-        try {
-          listener(data)
-        } catch (error) {
-          console.error(`Store事件监听器执行错误: ${eventName}`, error)
-        }
-      })
-    }
+  function triggerAnimationComplete(data) {
+    animationEvents.value.lastComplete = { ...data, timestamp: Date.now() }
   }
-
+  
+  function triggerAnimationStep(data) {
+    animationEvents.value.lastStep = { ...data, timestamp: Date.now() }
+  }
+  
+  function triggerAnimationError(data) {
+    animationEvents.value.lastError = { ...data, timestamp: Date.now() }
+  }
   
   function setTimeline(timelineInstance) {
     instances.value.timeline = timelineInstance
@@ -96,37 +108,6 @@ export const useAnimationStore = defineStore('animation', () => {
   
   function setAnimationManager(managerInstance) {
     instances.value.animationManager = managerInstance
-    
-    // 监听动画管理器的事件
-    if (instances.value.animationManager) {
-      const manager = instances.value.animationManager
-      
-      // 动画更新事件
-      manager.on('animationUpdate', (data) => {
-        updateFromAnimationData(data)
-        emit('particleUpdate', data)
-      })
-      
-      // 动画完成事件
-      manager.on('animationComplete', (data) => {
-        animationState.value.isPlaying = false
-        animationState.value.currentPhase = ''
-        emit('animationComplete', data)
-      })
-      
-      // 动画步骤事件
-      manager.on('animationStep', (data) => {
-        animationState.value.currentAnimation = data.name
-        emit('animationStep', data)
-      })
-      
-      // 动画错误事件
-      manager.on('animationError', (data) => {
-        animationState.value.isPlaying = false
-        console.error('动画执行错误:', data.error)
-        emit('animationError', data)
-      })
-    }
   }
   
   // ===== 统一更新方法 =====
@@ -224,15 +205,14 @@ export const useAnimationStore = defineStore('animation', () => {
         default:
           throw new Error(`未知动画类型: ${type}`)
       }
-      
-      console.log(`${type} 动画已启动`)
+
       return true
       
     } catch (error) {
       console.error(`启动 ${type} 动画时出错:`, error)
       animationState.value.isPlaying = false
       animationState.value.currentPhase = ''
-      emit('animationError', { error: error.message, type })
+      triggerAnimationError({ error: error.message, type })
       return false
     }
   }
@@ -294,7 +274,6 @@ export const useAnimationStore = defineStore('animation', () => {
     if (timeline) {
       const currentLoopState = timeline.getInfo().isLooping
       timeline.setLoop(!currentLoopState)
-      console.log(`循环播放已${!currentLoopState ? '开启' : '关闭'}`)
     }
   }
   
@@ -316,6 +295,7 @@ export const useAnimationStore = defineStore('animation', () => {
     cameraParams,
     animationState,
     instances,
+    animationEvents, // 新增：动画事件状态
     
     // ===== 计算属性 =====
     animationInfo,
@@ -331,6 +311,7 @@ export const useAnimationStore = defineStore('animation', () => {
     updateCameraParams,
     updateAnimationState,
     updateFromAnimationData,
+    updateCubeParamsFromStore,
     
     // 动画控制
     startAnimation,
@@ -340,9 +321,10 @@ export const useAnimationStore = defineStore('animation', () => {
     toggleLoop,
     getTimelineInfo,
     
-    // 事件系统
-    on,
-    off,
-    emit
+    // 事件触发方法（替代emit）
+    triggerAnimationUpdate,
+    triggerAnimationComplete,
+    triggerAnimationStep,
+    triggerAnimationError
   }
 })

@@ -1,129 +1,64 @@
-import { onMounted, onUnmounted } from 'vue'
+import { onUnmounted } from 'vue'
 
 /**
- * Vue 3 事件监听器管理 composable
- * 自动处理事件监听器的添加和移除，避免内存泄漏
+ * 现代Vue 3事件监听器管理
+ * 使用AbortController自动清理所有监听器
  */
 export function useEventListeners() {
-  const listeners = []
-
-  /**
-   * 添加事件监听器
-   * @param {EventTarget} target - 事件目标（如 window, document, element）
-   * @param {string} event - 事件名称
-   * @param {Function} handler - 事件处理函数
-   * @param {Object} options - 事件选项
-   */
+  const controller = new AbortController()
+  
   const addListener = (target, event, handler, options = {}) => {
-    target.addEventListener(event, handler, options)
-    listeners.push({ target, event, handler, options })
-  }
-
-  /**
-   * 移除事件监听器
-   * @param {EventTarget} target - 事件目标
-   * @param {string} event - 事件名称
-   * @param {Function} handler - 事件处理函数
-   */
-  const removeListener = (target, event, handler) => {
-    target.removeEventListener(event, handler)
-    const index = listeners.findIndex(
-      listener => listener.target === target && 
-                 listener.event === event && 
-                 listener.handler === handler
-    )
-    if (index > -1) {
-      listeners.splice(index, 1)
-    }
-  }
-
-  /**
-   * 清理所有事件监听器
-   */
-  const cleanup = () => {
-    listeners.forEach(({ target, event, handler, options }) => {
-      target.removeEventListener(event, handler, options)
+    target.addEventListener(event, handler, {
+      ...options,
+      signal: controller.signal
     })
-    listeners.length = 0
   }
 
-  /**
-   * 获取当前监听器状态
-   */
-  const getStatus = () => ({
-    count: listeners.length,
-    listeners: listeners.map(({ target, event }) => ({ target, event }))
-  })
+  const cleanup = () => controller.abort()
 
-  // 自动清理
-  onUnmounted(() => {
-    cleanup()
-  })
+  onUnmounted(cleanup)
 
-  return {
-    addListener,
-    removeListener,
-    cleanup,
-    getStatus
-  }
+  return { addListener, cleanup }
 }
 
 /**
- * 专门用于窗口事件的 composable
+ * 窗口事件监听器
  */
 export function useWindowEvents() {
-  const { addListener, removeListener, cleanup, getStatus } = useEventListeners()
-
-  /**
-   * 添加窗口事件监听器
-   */
+  const controller = new AbortController()
+  
   const addWindowListener = (event, handler, options = {}) => {
-    addListener(window, event, handler, options)
+    window.addEventListener(event, handler, {
+      ...options,
+      signal: controller.signal
+    })
   }
 
-  /**
-   * 移除窗口事件监听器
-   */
-  const removeWindowListener = (event, handler) => {
-    removeListener(window, event, handler)
-  }
+  const cleanup = () => controller.abort()
 
-  return {
-    addWindowListener,
-    removeWindowListener,
-    cleanup,
-    getStatus
-  }
+  onUnmounted(cleanup)
+
+  return { addWindowListener, cleanup }
 }
 
 /**
- * 专门用于 DOM 元素事件的 composable
+ * DOM元素事件监听器
  */
 export function useElementEvents() {
-  const { addListener, removeListener, cleanup, getStatus } = useEventListeners()
-
-  /**
-   * 添加元素事件监听器
-   */
+  const controller = new AbortController()
+  
   const addElementListener = (element, event, handler, options = {}) => {
     if (element) {
-      addListener(element, event, handler, options)
+      element.addEventListener(event, handler, {
+        ...options,
+        signal: controller.signal
+      })
     }
   }
 
-  /**
-   * 移除元素事件监听器
-   */
-  const removeElementListener = (element, event, handler) => {
-    if (element) {
-      removeListener(element, event, handler)
-    }
-  }
+  const cleanup = () => controller.abort()
 
-  return {
-    addElementListener,
-    removeElementListener,
-    cleanup,
-    getStatus
-  }
+  onUnmounted(cleanup)
+
+  return { addElementListener, cleanup }
 }

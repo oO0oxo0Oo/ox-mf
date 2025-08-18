@@ -78,10 +78,10 @@ const animationStore = useAnimationStore()
 const timeline = useTimeline()
 let animationManager = null
 
-// 监听自定义边长变化，实时更新魔方
-watch(() => cubeStore.config.customPieceSize, (newSize) => {
-  if (cubeInstance && cubeInstance.regenerateModel) {
-    cubeInstance.regenerateModel(newSize)
+// 监听魔方边长变化，实时更新魔方
+watch(() => cubeStore.config.pieceSize, (newSize) => {
+  if (cubeInstance && cubeInstance.updatePieceSize) {
+    cubeInstance.updatePieceSize(newSize)
   }
 })
 
@@ -105,13 +105,12 @@ function initAnimationSystem() {
     8,    // baseRadius
     0,    // initialRotationX
     0,    // initialRotationY
-    cubeInstance // 魔方实例
+    cubeInstance, // 魔方实例
+    cubeStore // 传入cube store
   )
   
   // 设置到store中
   animationStore.setAnimationManager(animationManager)
-  
-  console.log('动画系统初始化完成')
 }
 
 // 初始化魔方
@@ -126,8 +125,6 @@ function initCube() {
     console.warn('World 场景未准备好')
     return
   }
-
-  console.log('开始初始化魔方...', props.cubeConfig)
   
   // 根据配置设置魔方类型
   cubeStore.setCubeType(props.cubeConfig.type)
@@ -150,7 +147,6 @@ function initCube() {
   // 初始化动画系统
   initAnimationSystem()
   
-  console.log('魔方和控制模块初始化完成，贴片已隐藏')
 }
 
 // 切换贴片可见性
@@ -158,7 +154,6 @@ function toggleEdges() {
   if (cubeInstance) {
     const isVisible = cubeInstance.toggleEdges()
     edgesVisible.value = isVisible
-    console.log(`贴片已${isVisible ? '显示' : '隐藏'}`)
   }
 }
 

@@ -62,8 +62,6 @@ export function useTween(options) {
     if (delay) setTimeout(() => startAnim(), delay);
     else startAnim();
 
-    // 首帧立即执行 onUpdate
-    console.log('Tween: First frame update');
     onUpdate(state);
 
     function update(frameDelta = 16.7) {

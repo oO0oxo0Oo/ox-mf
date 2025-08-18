@@ -106,7 +106,7 @@ export class CubeInterface {
 
   // 重新生成模型 - 通用实现
   regenerateModel(customPieceSize = null) {
-    const pieceSize = customPieceSize || this.geometry.pieceSize;
+    const pieceSize = customPieceSize;
     
     // 只更新每个piece的几何体大小
     this.pieces.forEach((piece) => {

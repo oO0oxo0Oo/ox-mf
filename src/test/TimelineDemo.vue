@@ -170,13 +170,11 @@ function setupTimeline() {
   // 设置回调
   timeline.on('start', () => {
     isPlaying.value = true;
-    console.log('时间线开始播放');
   });
 
   timeline.on('step', (item, index) => {
     currentIndex.value = index;
     currentAnimationName.value = item.name;
-    console.log(`播放动画: ${item.name}`);
   });
 
   timeline.on('update', (state, item, index) => {
@@ -185,7 +183,6 @@ function setupTimeline() {
 
   timeline.on('complete', () => {
     isPlaying.value = false;
-    console.log('时间线播放完成');
   });
 
   // 获取时间线信息

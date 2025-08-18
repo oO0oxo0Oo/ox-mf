@@ -7,7 +7,6 @@ const rotationQueueStore = useRotationQueueStore();
 const cubeStore = useCubeStore();
 
 const scramble = () => {
-	// console.log(randomScramble,"!!!!!!")
 	cubeStore.scrambleCube();
 }
 const solve = () =>{

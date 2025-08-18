@@ -113,7 +113,6 @@ function startTween() {
     },
     onComplete: () => {
       // 动画完成
-      // console.log('动画完成')
     }
   })
 }

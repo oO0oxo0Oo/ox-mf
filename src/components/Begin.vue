@@ -24,7 +24,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted, watch } from 'vue'
 import CubeSelection from './CubeSelection.vue'
 
 // Three.js 核心库导入
@@ -41,6 +41,7 @@ import { useAnimation } from '../composable/useAnimation.js'
 import { useTimeline } from '../composable/useTimeline.js'
 import { TimelineAnimationManager } from '../animations/timelineAnimations.js'
 import { useAnimationStore } from '../stores/animation.js'
+import { useCubeStore } from '../stores/cube.js'
 import { useWindowEvents } from '../composable/useEventListeners.js'
 import { useDraggable } from '../composable/useDraggable.js'
 
@@ -55,6 +56,7 @@ const selectedCubeConfig = ref(null) // 保存用户选择的魔方配置
 // ===== 时间线动画系统 =====
 const timeline = useTimeline()
 const animationStore = useAnimationStore()
+const cubeStore = useCubeStore()
 
 // ===== 窗口事件管理 =====
 const { addWindowListener, cleanup: cleanupWindowEvents } = useWindowEvents()
@@ -580,14 +582,10 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
-  console.log('Begin组件开始销毁和清理资源...')
+  ('Begin组件开始销毁和清理资源...')
   
   // 清理事件监听器
   removeEventListeners()
-  
-  // 清理动画store的事件监听器
-  animationStore.off('particleUpdate', () => {})
-  animationStore.off('animationComplete', () => {})
   
   // 停止并销毁渲染循环
   stopRenderLoop()
@@ -595,11 +593,6 @@ onUnmounted(() => {
   
   // 清理动画管理器
   if (animationManager) {
-    // 移除所有事件监听器
-    animationManager.off && animationManager.off('animationUpdate')
-    animationManager.off && animationManager.off('animationComplete')
-    animationManager.off && animationManager.off('animationStep')
-    
     // 销毁动画管理器
     animationManager.destroy && animationManager.destroy()
     animationManager = null
@@ -641,8 +634,6 @@ onUnmounted(() => {
     scene = null
   }
   camera = null
-  
-  console.log('Begin组件资源清理完成')
 })
 
 // ===== 动画控制函数 =====
@@ -718,14 +709,12 @@ function getAnimationManager(cubeInstance = null) {
       baseRadius, 
       initialRotationX, 
       initialRotationY,
-      cubeInstance // 可选的魔方实例
+      cubeInstance, // 可选的魔方实例
+      animationStore // 传入animation store
     )
     
     // 设置到store中
     animationStore.setAnimationManager(animationManager)
-    
-    // 统一设置事件监听器
-    setupAnimationEventListeners()
   }
   
   // 如果提供了新的魔方实例，更新它
@@ -736,85 +725,29 @@ function getAnimationManager(cubeInstance = null) {
   return animationManager
 }
 
-function setupAnimationEventListeners() {
-  // 监听动画管理器的事件
-  if (animationManager) {
-    // 粒子更新事件
-    animationManager.on('animationUpdate', (data) => {
-      // 更新本地变量
-      if (data.cubeSizeMultiplier !== undefined) {
-        cubeSizeMultiplier.value = data.cubeSizeMultiplier
-      }
-      if (data.gapSizeMultiplier !== undefined) {
-        gapSizeMultiplier.value = data.gapSizeMultiplier
-      }
-      
-      // 更新粒子位置以应用新的参数
-      if (particles && particles.geometry) {
-        if (data.gapSizeMultiplier !== undefined) {
-          updateParticlePositions(data.gapSizeMultiplier)
-        }
-        if (data.cubeSizeMultiplier !== undefined) {
-          updateParticlePositions(data.gapSizeMultiplier || gapSizeMultiplier.value)
-        }
-      }
-    })
+// ===== 使用watch监听动画事件 =====
+
+// 监听动画更新事件
+watch(() => animationStore.animationEvents.lastUpdate, (newUpdate, oldUpdate) => {
+  if (newUpdate && newUpdate !== oldUpdate) {
+    const data = newUpdate
     
-    // 动画完成事件
-    animationManager.on('animationComplete', (data) => {
-      console.log('动画完成事件:', data)
-      
-      // 检查是否是急速拓展动画完成
-      if (data.phase === 'rapidExpansionComplete' && data.nextAction === 'waitForUserInput') {
-        isFirstPhaseComplete.value = true
-        console.log('急速拓展动画完成，显示魔方选择UI')
-        // 不发送 animation-complete 事件，避免触发页面跳转
-      } 
-      // 检查是否是最终调整动画完成
-      else if (data.phase === 'finalAdjustmentComplete' && data.nextAction === 'cubeEntrance') {
-        // 最终调整完成时，如果有保存的配置就跳转到魔方页面，否则发送完成事件
-        if (timeline) {
-          timeline.reset()
-        }
-        
-        if (selectedCubeConfig.value) {
-          console.log('最终调整动画完成，跳转到魔方页面')
-          emit('navigate-to-cube', selectedCubeConfig.value)
-        } else {
-          console.log('最终调整动画完成，发送完成事件')
-          emit('animation-complete')
-        }
-      }
-      // 兼容旧版本事件（保留向后兼容性）
-      else if (data.phase === 'firstPhaseComplete' && data.shouldPause) {
-        isFirstPhaseComplete.value = true
-        console.log('第一阶段完成，显示中间UI（兼容模式）')
-      } else if (data.phase === 'userTriggeredComplete' && data.isSecondPhase) {
-        if (timeline) {
-          timeline.reset()
-        }
-        emit('animation-complete')
-        console.log('第二阶段完成，发送完成事件（兼容模式）')
-      } else {
-        // 其他情况下的完成处理（如初始化动画等）
-        console.log('其他动画完成:', data.phase)
-      }
-    })
-    
-    // 动画步骤事件
-    animationManager.on('animationStep', (data) => {
-      console.log('动画步骤:', data)
-    })
-  }
-  
-  // 监听store的事件（保留兼容性）
-  animationStore.on('particleUpdate', (data) => {
     // 更新本地变量
     if (data.cubeSizeMultiplier !== undefined) {
       cubeSizeMultiplier.value = data.cubeSizeMultiplier
     }
     if (data.gapSizeMultiplier !== undefined) {
       gapSizeMultiplier.value = data.gapSizeMultiplier
+    }
+    
+    // 同步相机旋转参数
+    if (data.currentRotationX !== undefined) {
+      currentRotationX.value = data.currentRotationX
+      targetRotationX.value = data.currentRotationX
+    }
+    if (data.currentRotationY !== undefined) {
+      currentRotationY.value = data.currentRotationY
+      targetRotationY.value = data.currentRotationY
     }
     
     // 更新粒子位置以应用新的参数
@@ -826,22 +759,60 @@ function setupAnimationEventListeners() {
         updateParticlePositions(data.gapSizeMultiplier || gapSizeMultiplier.value)
       }
     }
-  })
-  
-  // 监听store的动画完成事件
-  animationStore.on('animationComplete', (data) => {
-    console.log('Store动画完成:', data)
+  }
+}, { deep: true })
+
+// 监听动画完成事件
+watch(() => animationStore.animationEvents.lastComplete, (newComplete, oldComplete) => {
+  if (newComplete && newComplete !== oldComplete) {
+    const data = newComplete
     
-    // 只有在第二阶段完成时才通知父组件
-    if (data.phase === 'userTriggeredComplete' && data.isSecondPhase) {
-      emit('animation-complete')
-      console.log('Store: 第二阶段完成，发送完成事件')
-    } else if (data.phase === 'firstPhaseComplete') {
-      console.log('Store: 第一阶段完成，不发送完成事件')
+    // 检查是否是急速拓展动画完成
+    if (data.phase === 'rapidExpansionComplete' && data.nextAction === 'waitForUserInput') {
+      isFirstPhaseComplete.value = true
+      // 不发送 animation-complete 事件，避免触发页面跳转
+    } 
+    // 检查是否是最终调整动画完成
+    else if (data.phase === 'finalAdjustmentComplete' && data.nextAction === 'cubeEntrance') {
+      // 最终调整完成时，如果有保存的配置就跳转到魔方页面，否则发送完成事件
+      if (timeline) {
+        timeline.reset()
+      }
+      
+      if (selectedCubeConfig.value) {
+        emit('navigate-to-cube', selectedCubeConfig.value)
+      } else {
+        emit('animation-complete')
+      }
     }
-  })
-  
-}
+    // 兼容旧版本事件（保留向后兼容性）
+    else if (data.phase === 'firstPhaseComplete' && data.shouldPause) {
+      isFirstPhaseComplete.value = true
+    } else if (data.phase === 'userTriggeredComplete' && data.isSecondPhase) {
+      if (timeline) {
+        timeline.reset()
+      }
+      emit('animation-complete')
+    } else {
+      // 其他情况下的完成处理（如初始化动画等）
+      console.log('其他动画完成:', data.phase)
+    }
+  }
+}, { deep: true })
+
+// 监听动画步骤事件
+watch(() => animationStore.animationEvents.lastStep, (newStep, oldStep) => {
+  if (newStep && newStep !== oldStep) {
+    console.log('动画步骤:', newStep)
+  }
+}, { deep: true })
+
+// 监听动画错误事件
+watch(() => animationStore.animationEvents.lastError, (newError, oldError) => {
+  if (newError && newError !== oldError) {
+    console.error('动画错误:', newError)
+  }
+}, { deep: true })
 
 //执行初始化动画 - 页面加载时的入场效果
 function playInitializationAnimation() {
@@ -859,7 +830,6 @@ function startAnimation() {
 
 // 处理魔方选择确认
 function onSelectionConfirmed(selection) {
-  console.log('用户选择:', selection)
   
   // 保存选择配置，稍后在最终调整动画完成后使用
   selectedCubeConfig.value = selection
@@ -880,10 +850,9 @@ function onSelectionConfirmed(selection) {
 function continueToNextPhase() {
   const manager = getAnimationManager()
   if (manager && manager.setupFinalAdjustmentAnimation) {
-    console.log('开始最终调整动画')
     isFirstPhaseComplete.value = false // 隐藏中间UI
     manager.setupFinalAdjustmentAnimation(() => {
-      console.log('最终调整动画完成，准备魔方出场')
+      
     })
   } else {
     console.error('动画管理器未准备好或setupFinalAdjustmentAnimation方法不存在')
