@@ -1,10 +1,10 @@
 import { useCube as useCube3 } from './cube3.js';
 import { useCube as useCube2 } from './cube2.js';
 
-const createCubeFactory = () =>{
+const createCubeFactory = () => {
   const cubeTypes = new Map();
 
-  const register = (type, createCubeFn) =>{
+  const register = (type, createCubeFn) => {
     cubeTypes.set(type, createCubeFn);
   }
 
@@ -16,7 +16,11 @@ const createCubeFactory = () =>{
     }
 
     return createCubeFn(scene);
-  } 
+  }
+
+  const getAvailableTypes = () => {
+    return Array.from(cubeTypes.keys());
+  }
 
   // 注册魔方类型
   register('cube3', useCube3);
@@ -25,6 +29,7 @@ const createCubeFactory = () =>{
   return {
     register,
     createCube,
+    getAvailableTypes,
   }
 }
 

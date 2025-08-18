@@ -1,7 +1,5 @@
 import { RoundedBoxGeometry, RoundedPlaneGeometry } from "../geometry/Geometry";
 import * as THREE from "three";
-import { useScramble } from "../composable/useScramble.js";
-import { useRotationQueueStore } from "../stores/rotationQueue.js";
 import { CubeInterface } from "./CubeInterface.js";
 
 export function useCube(scene) {
@@ -20,49 +18,20 @@ export function useCube(scene) {
 	// 获取引用
 	const { pieces, edges, positions, holder, object, animator, group } = cube;
 
-	// 设置对象名称
-	object.name = "cubeObject";
-	group.name = "layerGroup";
+	// ========== 二阶魔方特有的抽象方法实现 ==========
 
-	// 打乱相关状态
-	let isScrambling = false;
-	let scrambleCallback = null;
-	let rotationTween = null;
+	// 获取缩放倍数（二阶魔方为4）
+	cube.getScaleMultiplier = function() {
+		return 4;
+	};
 
-	// 初始化魔方
-	function init() {
-		// 对象已经在声明时创建，只需要设置层级关系
-		holder.add(animator);
-		animator.add(object);
+	// 获取魔方维度（二阶魔方为2）
+	cube.getDimensions = function() {
+		return 2;
+	};
 
-		generatePositions();
-		generateModel();
-
-		pieces.forEach((piece) => {
-			object.add(piece);
-		});
-
-		holder.traverse((node) => {
-			if (node.frustumCulled) node.frustumCulled = false;
-		});
-
-		scene.add(holder);
-	}
-
-	// 重置魔方
-	function reset() {
-		holder.rotation.set(0, 0, 0);
-		object.rotation.set(0, 0, 0);
-		animator.rotation.set(0, 0, 0);
-
-		pieces.forEach((piece) => {
-			piece.position.copy(piece.userData.start.position);
-			piece.rotation.copy(piece.userData.start.rotation);
-		});
-	}
-
-	// 生成位置数据 - 修改为二阶魔方（只有角块）
-	function generatePositions() {
+	// 生成位置数据 - 二阶魔方（只有角块）
+	cube.generatePositions = function(customPieceSize = null) {
 		positions.length = 0;
 
 		// 这些位置是块的中心位置，块会紧密排列
@@ -93,10 +62,10 @@ export function useCube(scene) {
 			position.edges = edges;
 			positions.push(position);
 		});
-	}
+	};
 
-	// 生成魔方模型 
-	function generateModel(customPieceSize = null) {
+	// 生成魔方模型 - 二阶魔方
+	cube.generateModel = function(customPieceSize = null) {
 		pieces.length = 0;
 		edges.length = 0;
 
@@ -171,170 +140,7 @@ export function useCube(scene) {
 
 			pieces.push(piece);
 		});
-	}
-
-	// 重新生成模型 - 使用继承的方法
-
-	// ========== 从 useControls 移过来的魔方操作方法 ==========
-
-	// 获取魔方块在世界坐标下的位置
-	function getPiecePosition(piece) {
-		if (!piece || !piece.matrixWorld) return new THREE.Vector3();
-
-		let position = new THREE.Vector3()
-			.setFromMatrixPosition(piece.matrixWorld)
-			.multiplyScalar(4); 
-
-		if (!object || !animator) {
-			return position.round();
-		}
-
-		return object.worldToLocal(position.sub(animator.position)).round();
-	}
-
-	// 获取向量的主轴
-	function getMainAxis(vector) {
-		return Object.keys(vector).reduce((a, b) =>
-			Math.abs(vector[a]) > Math.abs(vector[b]) ? a : b
-		);
-	}
-
-	// 获取某一层的所有块（完全贴近源码实现）- 二阶魔方逻辑
-	function getLayer(position, flipAxis = null, dragIntersectObject = null) {
-		const layer = [];
-		let axis;
-
-		if (position === false) {
-			if (!flipAxis || !dragIntersectObject) return [];
-			axis = getMainAxis(flipAxis);
-			position = getPiecePosition(dragIntersectObject);
-		} else {
-			axis = getMainAxis(position);
-		}
-
-		pieces.forEach((piece) => {
-			const piecePosition = getPiecePosition(piece);
-			// 完全贴近源码：返回piece.name
-			if (piecePosition[axis] === position[axis]) layer.push(piece.name);
-		});
-
-		return layer;
-	}
-
-	// 魔方块在不同父对象间移动
-	function movePieces(layer, from, to) {
-		if (!layer || layer.length === 0 || !from || !to) return;
-
-		from.updateMatrixWorld();
-		to.updateMatrixWorld();
-
-		layer.forEach((index) => {
-			if (!pieces || !pieces[index]) return;
-
-			const piece = pieces[index];
-			piece.applyMatrix4(from.matrixWorld);
-			from.remove(piece);
-			const inverseMatrix = new THREE.Matrix4().copy(to.matrixWorld).invert();
-			piece.applyMatrix4(inverseMatrix);
-			to.add(piece);
-		});
-	}
-
-	// 选中某一层
-	function selectLayer(layer) {
-		// 先清空层组
-		if (group.children.length > 0) {
-			const currentLayer = [];
-			group.children.forEach((child) => {
-				const index = parseInt(child.name);
-				if (!isNaN(index)) {
-					currentLayer.push(index);
-				}
-			});
-			deselectLayer(currentLayer);
-		}
-		group.rotation.set(0, 0, 0);
-		movePieces(layer, object, group);
-	}
-
-	// 取消选中某一层
-	function deselectLayer(layer) {
-		if (!layer) return;
-		movePieces(layer, group, object);
-	}
-
-	// 根据面获取对应的层 - 二阶魔方逻辑
-	function getLayerForFace(face) {
-		if (!pieces || pieces.length === 0) return [];
-
-		const faceMap = {
-			U: { axis: "y", value: 1 },
-			D: { axis: "y", value: -1 },
-			L: { axis: "x", value: -1 },
-			R: { axis: "x", value: 1 },
-			F: { axis: "z", value: 1 },
-			B: { axis: "z", value: -1 },
-		};
-
-		const faceConfig = faceMap[face];
-		if (!faceConfig) return [];
-
-		// 创建一个虚拟的position对象来复用getLayer
-		const virtualPosition = {};
-		virtualPosition[faceConfig.axis] = faceConfig.value;
-
-		return getLayer(faceConfig.axis, virtualPosition);
-	}
-
-	// 检查魔方是否还原
-	function checkIsSolved() {
-		// 这里可以添加检查逻辑
-		return false;
-	}
-
-	// 获取层旋转组
-	function getLayerGroup() {
-		return group;
-	}
-
-	// 将层组添加到对象
-	function addLayerGroup() {
-		if (!object.children.includes(group)) {
-			object.add(group);
-		}
-	}
-
-	// 从对象移除层组
-	function removeLayerGroup() {
-		object.remove(group);
-	}
-
-	// ========== 打乱相关方法（从 useControls 移过来） ==========
-
-	// 魔方打乱动画
-	function scrambleCube() {
-		const queue = useScramble();
-		const rotationQueueStore = useRotationQueueStore();
-		cube.isScrambling = true;
-		rotationQueueStore.rotationQueue(queue);
-	}
-
-	// 简化的打乱逻辑已使用 rotationQueue
-
-	// 获取打乱状态
-	function getScrambleState() {
-		return cube.isScrambling;
-	}
-
-	// 停止打乱
-	function stopScramble() {
-		cube.isScrambling = false;
-		if (cube.rotationTween) {
-			cube.rotationTween.stop();
-		}
-		const rotationQueueStore = useRotationQueueStore();
-		rotationQueueStore.clearRotationQueue();
-	}
+	};
 
 	return {
 		// 状态
@@ -346,44 +152,44 @@ export function useCube(scene) {
 		object,
 		animator,
 
-		// 基础方法
-		init,
-		reset,
-		generatePositions,
-		generateModel,
+		// 基础方法 - 继承自CubeInterface
+		init: cube.init.bind(cube),
+		reset: cube.reset.bind(cube),
+		generatePositions: cube.generatePositions.bind(cube),
+		generateModel: cube.generateModel.bind(cube),
 
-		// 魔方操作方法（从 useControls 移过来）
-		getPiecePosition,
-		getMainAxis,
-		getLayer,
-		movePieces,
-		selectLayer,
-		deselectLayer,
-		getLayerForFace,
-		checkIsSolved,
-		getLayerGroup,
-		addLayerGroup,
-		removeLayerGroup,
+		// 魔方操作方法 - 继承自CubeInterface
+		getPiecePosition: cube.getPiecePosition.bind(cube),
+		getMainAxis: cube.getMainAxis.bind(cube),
+		getLayer: cube.getLayer.bind(cube),
+		movePieces: cube.movePieces.bind(cube),
+		selectLayer: cube.selectLayer.bind(cube),
+		deselectLayer: cube.deselectLayer.bind(cube),
+		getLayerForFace: cube.getLayerForFace.bind(cube),
+		checkIsSolved: cube.checkIsSolved.bind(cube),
+		getLayerGroup: cube.getLayerGroup.bind(cube),
+		addLayerGroup: cube.addLayerGroup.bind(cube),
+		removeLayerGroup: cube.removeLayerGroup.bind(cube),
 
-		// 打乱相关方法
-		scrambleCube,
-		getScrambleState,
-		stopScramble,
+		// 打乱相关方法 - 继承自CubeInterface
+		scrambleCube: cube.scrambleCube.bind(cube),
+		getScrambleState: cube.getScrambleState.bind(cube),
+		stopScramble: cube.stopScramble.bind(cube),
 
-		// 贴片可见性控制 - 使用继承的方法
+		// 贴片可见性控制 - 继承自CubeInterface
 		hideEdges: cube.hideEdges.bind(cube),
 		showEdges: cube.showEdges.bind(cube),
 		toggleEdges: cube.toggleEdges.bind(cube),
 		getEdgesVisibility: cube.getEdgesVisibility.bind(cube),
 
-		// 边长控制 - 使用继承的方法
+		// 边长控制 - 继承自CubeInterface
 		updatePieceSize: cube.updatePieceSize.bind(cube),
 		regenerateModel: cube.regenerateModel.bind(cube),
 		updatePieceCornerRadius: cube.updatePieceCornerRadius.bind(cube),
 		updateEdgeCornerRoundness: cube.updateEdgeCornerRoundness.bind(cube),
 		updateEdgeScale: cube.updateEdgeScale.bind(cube),
 
-		// 主体颜色控制 - 使用继承的方法
+		// 主体颜色控制 - 继承自CubeInterface
 		updateMainColor: cube.updateMainColor.bind(cube),
 		getMainColor: cube.getMainColor.bind(cube),
 	};
