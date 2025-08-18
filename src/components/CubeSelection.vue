@@ -116,13 +116,6 @@ function selectStyle(styleId) {
 
 // 确认选择
 function confirmSelection() {
-  console.log('确认选择被点击')
-  console.log('当前选中状态:', { type: selectedType.value, style: selectedStyle.value })
-  
-  if (!selectedType.value || !selectedStyle.value) {
-    console.log('选择不完整，无法确认')
-    return
-  }
 
   // 获取选择的详细信息
   const selectedTypeInfo = cubeTypes.value.find(type => type.id === selectedType.value)
@@ -139,8 +132,7 @@ function confirmSelection() {
       isCoolBlueStyle: selectedStyle.value === 'coolBlue'
     }
   }
-
-  console.log('发送选择确认事件:', selectionData)
+  
   emit('selection-confirmed', selectionData)
 }
 </script>

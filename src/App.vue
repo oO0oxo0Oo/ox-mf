@@ -45,14 +45,10 @@ function handleAnimationComplete() {
 
 // 处理导航到魔方页面事件
 function handleNavigateToCube(selection) {
-  console.log('App: 接收到魔方选择', selection)
-  
-  // 更新魔方配置
   cubeConfig.value = {
     type: selection.type,
     style: selection.style
-  }
-  
+  }  
   // 切换到魔方页面
   showBegin.value = false
 }

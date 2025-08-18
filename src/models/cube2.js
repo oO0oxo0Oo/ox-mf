@@ -10,7 +10,7 @@ export function useCube(scene) {
 	
 	// 覆盖几何配置 - 调整为二阶魔方
 	cube.geometry = {
-		pieceSize: 1 / 2, // 二阶魔方块大小，每个块大小为1
+		pieceSize: 1 / 2, 
 		pieceCornerRadius: 0.12,
 		edgeCornerRoundness: 0.15,
 		edgeScale: 0.82,
@@ -99,7 +99,7 @@ export function useCube(scene) {
 		pieces.length = 0;
 		edges.length = 0;
 
-		const pieceSize = customPieceSize || (1 / 2); // 二阶魔方固定为1/2
+		const pieceSize = customPieceSize ;
 		const mainMaterial = new THREE.MeshLambertMaterial({ color: 0x333333 });
 
 		const pieceMesh = new THREE.Mesh(

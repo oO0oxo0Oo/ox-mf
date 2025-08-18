@@ -870,16 +870,9 @@ function onSelectionConfirmed(selection) {
   // 启动最终调整动画
   const manager = getAnimationManager()
   if (manager && manager.setupFinalAdjustmentAnimation) {
-    console.log('开始最终调整动画')
     manager.setupFinalAdjustmentAnimation(() => {
-      console.log('最终调整动画完成，准备跳转到魔方页面')
-      // 最终调整动画完成后，发送导航事件
       emit('navigate-to-cube', selectedCubeConfig.value)
     })
-  } else {
-    console.error('动画管理器未准备好或setupFinalAdjustmentAnimation方法不存在')
-    // 如果动画系统有问题，直接跳转
-    emit('navigate-to-cube', selection)
   }
 }
 

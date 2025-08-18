@@ -58,13 +58,13 @@ export function useControls(targetRef, cubeInstance, camera, options = {}) {
 	const helperMaterial = new THREE.MeshBasicMaterial({
 		depthWrite: false,
 		transparent: true,
-		opacity: 0.5, // 设置为半透明可见
+		opacity: 0, // 设置为半透明可见
 		color: 0x0033ff,
 	});
 
 	// 辅助对象
 	const helper = new THREE.Mesh(
-		new THREE.PlaneGeometry(3, 3),
+		new THREE.PlaneGeometry(20, 20),
 		helperMaterial.clone()
 	);
 	const edges = new THREE.Mesh(
