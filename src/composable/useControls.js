@@ -96,7 +96,7 @@ export function useControls(targetRef, cubeInstance, camera, options = {}) {
 		// 添加到场景（对应原始代码中的 this.game.world.scene.add）
 		worldMethods.scene.add(helper);
 		worldMethods.scene.add(edges);
-		worldMethods.scene.add(axesHelper);
+		// worldMethods.scene.add(axesHelper);
 
 		// 设置初始位置（对应原始代码中的 this.helper.rotation.set(0, Math.PI / 4, 0)）
 		helper.rotation.set(0, Math.PI / 4, 0);
@@ -150,13 +150,14 @@ export function useControls(targetRef, cubeInstance, camera, options = {}) {
 			// 为 helper 计算世界坐标系下的法线向量
 			const worldNormal = edgeIntersect.face.normal.clone();
 			worldNormal.applyMatrix4(edges.matrixWorld);
-			worldNormal.normalize();
-
+			worldNormal.round();
+			
 			attach(helper, edges);
 			helper.rotation.set(0, 0, 0);
 			helper.position.set(0, 0, 0);
 			helper.lookAt(worldNormal);
 			helper.translateZ(0.5);
+
 			helper.updateMatrixWorld();
 			detach(helper, edges);
 		} else {
@@ -207,35 +208,27 @@ export function useControls(targetRef, cubeInstance, camera, options = {}) {
 
 		if (state.value === PREPARING && dragState.total.length() > 0.05) {
 			dragState.direction = cubeInstance.getMainAxis(dragState.total);
-
 			if (rotationState.type === "layer") {
 				const direction = new THREE.Vector3();
 				direction[dragState.direction] = 1;
 
 				const worldDirection = helper
-					.localToWorld(direction)
+					.localToWorld(direction.clone())
 					.sub(helper.position);
-				const objectDirection = edges.worldToLocal(worldDirection).round();
+		
+				const objectDirection = edges.worldToLocal(worldDirection.clone()).round();
 
 				rotationState.axis = objectDirection.cross(dragState.normal).negate();
 
-				// 获取层，需要传入轴和相交对象
-				const axis = cubeInstance.getMainAxis(rotationState.axis);
-				const position = cubeInstance.getPiecePosition(
-					dragState.intersect.object
-				);
+				// 获取拖拽交点（对应源码中的 this.dragIntersect）
+				const dragIntersect = getIntersect(dragPosition.current, getCubePieces(), true);
+				if (dragIntersect === false) return;
 
-				// 根据轴和位置获取层
-				const layer = [];
-				const cubePieces = getCubePieces();
+				// 更新拖拽状态（对应源码中的 this.dragIntersect）
+				dragState.intersect = dragIntersect;
 
-				cubePieces.forEach((piece, index) => {
-					if (!piece) return;
-					const piecePosition = cubeInstance.getPiecePosition(piece);
-					if (piecePosition && piecePosition[axis] === position[axis]) {
-						layer.push(index);
-					}
-				});
+				// 完全贴近源码的调用方式
+				const layer = cubeInstance.getLayer(false, rotationState.axis, dragIntersect.object);
 				cubeInstance.selectLayer(layer);
 				rotationState.layer = layer;
 			} else {
@@ -474,6 +467,7 @@ export function useControls(targetRef, cubeInstance, camera, options = {}) {
 	// 将子对象附加到父对象（对应原始代码中的 attach 方法）
 	function attach(child, parent) {
 		const inverseMatrix = new THREE.Matrix4().copy(parent.matrixWorld).invert();
+		
 		child.applyMatrix4(inverseMatrix);
 		const worldMethods = gameStore.getWorldMethods();
 		if (worldMethods?.scene) {

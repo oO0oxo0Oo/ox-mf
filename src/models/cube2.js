@@ -95,11 +95,11 @@ export function useCube(scene) {
 	}
 
 	// 生成魔方模型 - 修改为二阶魔方
-	function generateModel() {
+	function generateModel(customPieceSize = null) {
 		pieces.length = 0;
 		edges.length = 0;
 
-		const pieceSize = 1 / 2;
+		const pieceSize = customPieceSize || (1 / 2); // 二阶魔方固定为1/2
 		const mainMaterial = new THREE.MeshLambertMaterial({ color: 0x333333 });
 
 		const pieceMesh = new THREE.Mesh(
@@ -172,6 +172,35 @@ export function useCube(scene) {
 		});
 	}
 
+	// 重新生成模型 - 用于动画中的尺寸变化
+	function regenerateModel(customPieceSize = null) {
+		// 清除现有的pieces
+		pieces.forEach(piece => {
+			if (piece.parent) {
+				piece.parent.remove(piece);
+			}
+			// 释放几何体和材质
+			piece.traverse((child) => {
+				if (child.geometry) child.geometry.dispose();
+				if (child.material) {
+					if (Array.isArray(child.material)) {
+						child.material.forEach(mat => mat.dispose());
+					} else {
+						child.material.dispose();
+					}
+				}
+			});
+		});
+
+		// 重新生成模型
+		generateModel(customPieceSize);
+
+		// 重新添加到场景
+		pieces.forEach((piece) => {
+			object.add(piece);
+		});
+	}
+
 	// ========== 从 useControls 移过来的魔方操作方法 ==========
 
 	// 获取魔方块在世界坐标下的位置
@@ -196,24 +225,24 @@ export function useCube(scene) {
 		);
 	}
 
-	// 获取某一层的所有块 - 修改为二阶魔方逻辑
-	function getLayer(position) {
+	// 获取某一层的所有块（完全贴近源码实现）- 二阶魔方逻辑
+	function getLayer(position, flipAxis = null, dragIntersectObject = null) {
 		const layer = [];
 		let axis;
 
 		if (position === false) {
-			// 这里需要从外部传入 axis 和 intersect object
-			return layer;
+			// 源码风格：需要外部传入flipAxis和dragIntersectObject
+			if (!flipAxis || !dragIntersectObject) return [];
+			axis = getMainAxis(flipAxis);
+			position = getPiecePosition(dragIntersectObject);
 		} else {
 			axis = getMainAxis(position);
 		}
 
-		pieces.forEach((piece, index) => {
-			if (!piece) return;
+		pieces.forEach((piece) => {
 			const piecePosition = getPiecePosition(piece);
-			if (piecePosition && piecePosition[axis] === position[axis]) {
-				layer.push(index);
-			}
+			// 完全贴近源码：返回piece.name
+			if (piecePosition[axis] === position[axis]) layer.push(piece.name);
 		});
 
 		return layer;
@@ -261,10 +290,10 @@ export function useCube(scene) {
 		movePieces(layer, group, object);
 	}
 
-	// 根据面获取对应的层 - 修改为二阶魔方逻辑
+	// 根据面获取对应的层 - 二阶魔方逻辑
 	function getLayerForFace(face) {
 		if (!pieces || pieces.length === 0) return [];
-		const layer = [];
+
 		const faceMap = {
 			U: { axis: "y", value: 1 },
 			D: { axis: "y", value: -1 },
@@ -277,19 +306,11 @@ export function useCube(scene) {
 		const faceConfig = faceMap[face];
 		if (!faceConfig) return [];
 
-		pieces.forEach((piece, index) => {
-			if (!piece) return;
+		// 创建一个虚拟的position对象来复用getLayer
+		const virtualPosition = {};
+		virtualPosition[faceConfig.axis] = faceConfig.value;
 
-			const piecePosition = getPiecePosition(piece);
-			if (
-				piecePosition &&
-				piecePosition[faceConfig.axis] === faceConfig.value
-			) {
-				layer.push(index);
-			}
-		});
-
-		return layer;
+		return getLayer(faceConfig.axis, virtualPosition);
 	}
 
 	// 检查魔方是否还原
@@ -384,9 +405,13 @@ export function useCube(scene) {
 
 		// 边长控制 - 使用继承的方法
 		updatePieceSize: cube.updatePieceSize.bind(cube),
-		regenerateModel: cube.regenerateModel.bind(cube),
+		regenerateModel, // 使用自定义的regenerateModel方法
 		updatePieceCornerRadius: cube.updatePieceCornerRadius.bind(cube),
 		updateEdgeCornerRoundness: cube.updateEdgeCornerRoundness.bind(cube),
 		updateEdgeScale: cube.updateEdgeScale.bind(cube),
+
+		// 主体颜色控制 - 使用继承的方法
+		updateMainColor: cube.updateMainColor.bind(cube),
+		getMainColor: cube.getMainColor.bind(cube),
 	};
 }

@@ -12,7 +12,6 @@ const createCubeFactory = () =>{
     const createCubeFn = cubeTypes.get(type);
 
     if (!createCubeFn) {
-      console.warn(`！！！！！！！`);
       return null;
     }
 

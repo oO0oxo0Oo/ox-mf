@@ -189,24 +189,24 @@ export function useCube(scene) {
 		);
 	}
 
-	// 获取某一层的所有块
-	function getLayer(position) {
+	// 获取某一层的所有块（完全贴近源码实现）
+	function getLayer(position, flipAxis = null, dragIntersectObject = null) {
 		const layer = [];
 		let axis;
 
 		if (position === false) {
-			// 这里需要从外部传入 axis 和 intersect object
-			return layer;
+			// 源码风格：需要外部传入flipAxis和dragIntersectObject
+			if (!flipAxis || !dragIntersectObject) return [];
+			axis = getMainAxis(flipAxis);
+			position = getPiecePosition(dragIntersectObject);
 		} else {
 			axis = getMainAxis(position);
 		}
 
-		pieces.forEach((piece, index) => {
-			if (!piece) return;
+		pieces.forEach((piece) => {
 			const piecePosition = getPiecePosition(piece);
-			if (piecePosition && piecePosition[axis] === position[axis]) {
-				layer.push(index);
-			}
+			// 完全贴近源码：返回piece.name
+			if (piecePosition[axis] === position[axis]) layer.push(piece.name);
 		});
 
 		return layer;
@@ -259,7 +259,6 @@ export function useCube(scene) {
 	function getLayerForFace(face) {
 		if (!pieces || pieces.length === 0) return [];
 
-		const layer = [];
 		const faceMap = {
 			U: { axis: "y", value: 1 },
 			D: { axis: "y", value: -1 },
@@ -272,20 +271,11 @@ export function useCube(scene) {
 		const faceConfig = faceMap[face];
 		if (!faceConfig) return [];
 
-		pieces.forEach((piece, index) => {
-			if (!piece) return;
+		// 创建一个虚拟的position对象来复用getLayer
+		const virtualPosition = {};
+		virtualPosition[faceConfig.axis] = faceConfig.value;
 
-			const piecePosition = getPiecePosition(piece);
-
-			if (
-				piecePosition &&
-				piecePosition[faceConfig.axis] === faceConfig.value
-			) {
-				layer.push(index);
-			}
-		});
-
-		return layer;
+		return getLayer(faceConfig.axis, virtualPosition);
 	}
 
 	// 根据当前魔方朝向获取对应的层（考虑魔方旋转）

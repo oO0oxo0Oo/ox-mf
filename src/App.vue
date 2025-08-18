@@ -4,10 +4,12 @@
       <Begin 
         v-if="showBegin" 
         @animation-complete="handleAnimationComplete"
+        @navigate-to-cube="handleNavigateToCube"
         key="begin"
       />
       <Cube
         v-else
+        :cube-config="cubeConfig"
         key="cube-demo"
       />
     </transition>
@@ -22,6 +24,12 @@ import Cube from './components/Cube.vue'
 // 控制组件显示状态
 const showBegin = ref(true)
 
+// 魔方配置状态
+const cubeConfig = ref({
+  type: 'cube3',  // 默认3阶魔方
+  style: 'classic' // 默认经典风格
+})
+
 // 响应式背景样式计算
 const appStyle = computed(() => ({
   background: showBegin.value 
@@ -32,6 +40,20 @@ const appStyle = computed(() => ({
 
 // 处理动画完成事件
 function handleAnimationComplete() {
+  showBegin.value = false
+}
+
+// 处理导航到魔方页面事件
+function handleNavigateToCube(selection) {
+  console.log('App: 接收到魔方选择', selection)
+  
+  // 更新魔方配置
+  cubeConfig.value = {
+    type: selection.type,
+    style: selection.style
+  }
+  
+  // 切换到魔方页面
   showBegin.value = false
 }
 

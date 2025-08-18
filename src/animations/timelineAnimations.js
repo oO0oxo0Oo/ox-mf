@@ -86,45 +86,104 @@ export class TimelineAnimationManager {
 
   /**
    * 设置用户触发动画时间线 - 点击开始按钮后的动画序列
+   * @deprecated 此方法已被拆分为两个独立的阶段，请使用 setupRapidExpansionAnimation 和 setupFinalAdjustmentAnimation
    */
   setupUserTriggeredTimeline() {
+    console.warn('setupUserTriggeredTimeline 已被废弃，请使用 setupRapidExpansionAnimation 和 setupFinalAdjustmentAnimation')
+    this.setupRapidExpansionAnimation()
+  }
+
+  /**
+   * 急速拓展动画 - 第一阶段独立动画
+   * 从初始状态快速拓展到最大尺寸，完全独立执行
+   */
+  setupRapidExpansionAnimation(onComplete = null) {
     this.timeline.reset()
     
-    // 第一阶段：急速拓展到1000
+    // 急速拓展阶段：从60到800的快速扩展
     this.timeline.addCustom((progress) => {
       const easedProgress = Easing.Power.Out(3)(progress)
       const newCubeSize = 60 + (800 - 60) * easedProgress
       const newGapSize = 8 + (12 - 8) * easedProgress
       
+      // 粒子系统同步缩放
       if (this.particles && this.particles.material) {
         const smoothScale = 1 + (1.2 - 1) * easedProgress
         this.particles.scale.setScalar(smoothScale)
+        this.particles.rotation.y = Math.PI * 0.5 * easedProgress // 添加旋转效果
       }
       
       this.emit('animationUpdate', {
         cubeSizeMultiplier: newCubeSize,
         gapSizeMultiplier: newGapSize,
         currentRotationX: this.initialRotationX,
-        phase: '急速拓展到1000',
-        progress: progress
+        phase: '急速拓展动画',
+        progress: progress,
+        animationType: 'rapidExpansion'
       })
     }, {
       duration: 800,
-      name: '急速拓展到1000',
+      name: '急速拓展动画',
       easing: Easing.Power.Out(3)
     })
+    
+    this.timeline.play()
+    
+    // 动画完成处理
+    this.timeline.on('complete', () => {
+      this.emit('animationStep', { 
+        name: '急速拓展动画完成', 
+        index: 0,
+        animationType: 'rapidExpansion'
+      })
+      
+      // 触发急速拓展完成事件
+      this.emit('animationComplete', { 
+        phase: 'rapidExpansionComplete',
+        animationType: 'rapidExpansion',
+        nextAction: 'waitForUserInput' // 明确指示需要等待用户输入
+      })
+      
+      // 执行回调函数（如果提供）
+      if (onComplete && typeof onComplete === 'function') {
+        try {
+          onComplete()
+        } catch (error) {
+          console.error('急速拓展动画完成回调执行错误:', error)
+          this.emit('animationError', { error: error.message, phase: 'rapidExpansion' })
+        }
+      }
+    })
+    
+    this.timeline.on('step', (item, index) => {
+      this.emit('animationStep', { 
+        name: item.name, 
+        index: index,
+        animationType: 'rapidExpansion'
+      })
+    })
+  }
 
-    // 第二阶段：最终调整
+  /**
+   * 最终调整动画 - 第二阶段独立动画
+   * 从拓展状态调整到最终形态，包含摄像机移动和粒子调整
+   */
+  setupFinalAdjustmentAnimation(onComplete = null) {
+    this.timeline.reset()
+    
+    // 最终调整阶段：从800收缩到40，添加摄像机动画和粒子效果
     this.timeline.addCustom((progress) => {
       const easedProgress = Easing.Power.InOut(2)(progress)
       const newCubeSize = 800 + (40 - 800) * easedProgress
       const newGapSize = 12 + (0 - 12) * easedProgress
       
+      // 摄像机旋转动画
       const finalRotationX = this.initialRotationX + Math.PI * 0.3
       const finalRotationY = this.initialRotationY + Math.PI * 0.2
       const currentRotationX = this.initialRotationX + (finalRotationX - this.initialRotationX) * easedProgress
       const currentRotationY = this.initialRotationY + (finalRotationY - this.initialRotationY) * easedProgress
       
+      // 更新摄像机位置
       if (this.camera) {
         const cameraX = Math.sin(currentRotationX) * Math.cos(currentRotationY) * this.baseRadius
         const cameraY = Math.sin(currentRotationY) * this.baseRadius
@@ -134,9 +193,15 @@ export class TimelineAnimationManager {
         this.camera.lookAt(0, 0, 0)
       }
       
+      // 粒子系统最终调整
       if (this.particles && this.particles.material) {
-        const finalParticleScale = 0.8 + (1.0 - 0.8) * easedProgress
+        const finalParticleScale = 1.2 + (0.8 - 1.2) * easedProgress
         this.particles.scale.setScalar(finalParticleScale)
+        // 粒子透明度逐渐降低，为魔方出场做准备
+        const particleOpacity = 1.0 - (0.3 * easedProgress)
+        if (this.particles.material.opacity !== undefined) {
+          this.particles.material.opacity = particleOpacity
+        }
       }
       
       this.emit('animationUpdate', {
@@ -144,32 +209,67 @@ export class TimelineAnimationManager {
         gapSizeMultiplier: newGapSize,
         currentRotationX: currentRotationX,
         currentRotationY: currentRotationY,
-        phase: '最终调整',
-        progress: progress
+        phase: '最终调整动画',
+        progress: progress,
+        animationType: 'finalAdjustment'
       })
     }, {
       duration: 500,
-      name: '最终调整',
+      name: '最终调整动画',
       easing: Easing.Power.InOut(2)
     })
     
     this.timeline.play()
     
+    // 动画完成处理
     this.timeline.on('complete', () => {
       this.emit('animationStep', { 
-        name: '准备启动魔方出场动画', 
-        index: -1 
+        name: '最终调整动画完成，准备魔方出场', 
+        index: 0,
+        animationType: 'finalAdjustment'
       })
-      // 触发动画完成事件
+      
+      // 触发最终调整完成事件
       this.emit('animationComplete', { 
-        phase: 'userTriggeredComplete',
-        isUserTriggered: true
+        phase: 'finalAdjustmentComplete',
+        animationType: 'finalAdjustment',
+        nextAction: 'cubeEntrance' // 指示下一步是魔方出场动画
       })
+      
+      // 执行回调函数（如果提供）
+      if (onComplete && typeof onComplete === 'function') {
+        try {
+          onComplete()
+        } catch (error) {
+          console.error('最终调整动画完成回调执行错误:', error)
+          this.emit('animationError', { error: error.message, phase: 'finalAdjustment' })
+        }
+      }
     })
     
     this.timeline.on('step', (item, index) => {
-      this.emit('animationStep', { name: item.name, index: index })
+      this.emit('animationStep', { 
+        name: item.name, 
+        index: index,
+        animationType: 'finalAdjustment'
+      })
     })
+  }
+
+  /**
+   * @deprecated 使用 setupFinalAdjustmentAnimation 替代
+   */
+  continueToSecondPhase() {
+    console.warn('continueToSecondPhase 已被废弃，请使用 setupFinalAdjustmentAnimation')
+    this.setupFinalAdjustmentAnimation()
+  }
+
+  /**
+   * @deprecated 使用 setupFinalAdjustmentAnimation 替代
+   */
+  setupSecondPhaseAnimation() {
+    console.warn('setupSecondPhaseAnimation 已被废弃，请使用 setupFinalAdjustmentAnimation')
+    this.setupFinalAdjustmentAnimation()
   }
 
   /**

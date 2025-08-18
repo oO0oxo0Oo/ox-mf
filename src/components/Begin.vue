@@ -6,13 +6,26 @@
     
     <!-- 动画控制按钮 -->
     <div class="animation-controls">
-      <button @click="startAnimation" class="start-btn">开始动画</button>
+      <button 
+        v-if="!isFirstPhaseComplete" 
+        @click="startAnimation" 
+        class="start-btn"
+      >
+        开始动画
+      </button>
+      
+      <!-- 第一阶段完成后显示魔方选择组件 -->
+      <CubeSelection 
+        v-if="isFirstPhaseComplete" 
+        @selection-confirmed="onSelectionConfirmed"
+      />
     </div>
   </div>
 </template>
 
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue'
+import CubeSelection from './CubeSelection.vue'
 
 // Three.js 核心库导入
 import * as THREE from 'three'
@@ -32,10 +45,12 @@ import { useWindowEvents } from '../composable/useEventListeners.js'
 import { useDraggable } from '../composable/useDraggable.js'
 
 // 定义组件事件
-const emit = defineEmits(['animation-complete'])
+const emit = defineEmits(['animation-complete', 'navigate-to-cube'])
 
 // ===== Vue 响应式数据 =====
 const container = ref(null)// DOM容器引用
+const isFirstPhaseComplete = ref(false) // 第一阶段是否完成
+const selectedCubeConfig = ref(null) // 保存用户选择的魔方配置
 
 // ===== 时间线动画系统 =====
 const timeline = useTimeline()
@@ -747,10 +762,43 @@ function setupAnimationEventListeners() {
     
     // 动画完成事件
     animationManager.on('animationComplete', (data) => {
-      if (timeline) {
-        timeline.reset()
+      console.log('动画完成事件:', data)
+      
+      // 检查是否是急速拓展动画完成
+      if (data.phase === 'rapidExpansionComplete' && data.nextAction === 'waitForUserInput') {
+        isFirstPhaseComplete.value = true
+        console.log('急速拓展动画完成，显示魔方选择UI')
+        // 不发送 animation-complete 事件，避免触发页面跳转
+      } 
+      // 检查是否是最终调整动画完成
+      else if (data.phase === 'finalAdjustmentComplete' && data.nextAction === 'cubeEntrance') {
+        // 最终调整完成时，如果有保存的配置就跳转到魔方页面，否则发送完成事件
+        if (timeline) {
+          timeline.reset()
+        }
+        
+        if (selectedCubeConfig.value) {
+          console.log('最终调整动画完成，跳转到魔方页面')
+          emit('navigate-to-cube', selectedCubeConfig.value)
+        } else {
+          console.log('最终调整动画完成，发送完成事件')
+          emit('animation-complete')
+        }
       }
-      emit('animation-complete')
+      // 兼容旧版本事件（保留向后兼容性）
+      else if (data.phase === 'firstPhaseComplete' && data.shouldPause) {
+        isFirstPhaseComplete.value = true
+        console.log('第一阶段完成，显示中间UI（兼容模式）')
+      } else if (data.phase === 'userTriggeredComplete' && data.isSecondPhase) {
+        if (timeline) {
+          timeline.reset()
+        }
+        emit('animation-complete')
+        console.log('第二阶段完成，发送完成事件（兼容模式）')
+      } else {
+        // 其他情况下的完成处理（如初始化动画等）
+        console.log('其他动画完成:', data.phase)
+      }
     })
     
     // 动画步骤事件
@@ -783,8 +831,14 @@ function setupAnimationEventListeners() {
   // 监听store的动画完成事件
   animationStore.on('animationComplete', (data) => {
     console.log('Store动画完成:', data)
-    // 通知父组件动画已完成
-    emit('animation-complete')
+    
+    // 只有在第二阶段完成时才通知父组件
+    if (data.phase === 'userTriggeredComplete' && data.isSecondPhase) {
+      emit('animation-complete')
+      console.log('Store: 第二阶段完成，发送完成事件')
+    } else if (data.phase === 'firstPhaseComplete') {
+      console.log('Store: 第一阶段完成，不发送完成事件')
+    }
   })
   
 }
@@ -797,8 +851,50 @@ function playInitializationAnimation() {
 
 function startAnimation() {
   const manager = getAnimationManager()
-  manager.setupUserTriggeredTimeline() 
+  // 使用新的急速拓展动画方法
+  manager.setupRapidExpansionAnimation(() => {
+    console.log('急速拓展动画完成，等待用户选择下一步操作')
+  })
+}
 
+// 处理魔方选择确认
+function onSelectionConfirmed(selection) {
+  console.log('用户选择:', selection)
+  
+  // 保存选择配置，稍后在最终调整动画完成后使用
+  selectedCubeConfig.value = selection
+  
+  // 隐藏选择UI，开始最终调整动画
+  isFirstPhaseComplete.value = false
+  
+  // 启动最终调整动画
+  const manager = getAnimationManager()
+  if (manager && manager.setupFinalAdjustmentAnimation) {
+    console.log('开始最终调整动画')
+    manager.setupFinalAdjustmentAnimation(() => {
+      console.log('最终调整动画完成，准备跳转到魔方页面')
+      // 最终调整动画完成后，发送导航事件
+      emit('navigate-to-cube', selectedCubeConfig.value)
+    })
+  } else {
+    console.error('动画管理器未准备好或setupFinalAdjustmentAnimation方法不存在')
+    // 如果动画系统有问题，直接跳转
+    emit('navigate-to-cube', selection)
+  }
+}
+
+// 继续到最终调整动画阶段
+function continueToNextPhase() {
+  const manager = getAnimationManager()
+  if (manager && manager.setupFinalAdjustmentAnimation) {
+    console.log('开始最终调整动画')
+    isFirstPhaseComplete.value = false // 隐藏中间UI
+    manager.setupFinalAdjustmentAnimation(() => {
+      console.log('最终调整动画完成，准备魔方出场')
+    })
+  } else {
+    console.error('动画管理器未准备好或setupFinalAdjustmentAnimation方法不存在')
+  }
 }
 
 
@@ -861,5 +957,73 @@ function startAnimation() {
 
 .start-btn:hover {
   background-color: rgba(255, 255, 255, 0.3);
+}
+
+/* 第一阶段完成后的UI样式 */
+.phase-complete-ui {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  padding: 30px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 12px;
+  backdrop-filter: blur(10px);
+  animation: fadeInUp 0.6s ease-out;
+}
+
+.completion-message {
+  text-align: center;
+  color: white;
+}
+
+.completion-message h2 {
+  margin: 0 0 10px 0;
+  font-size: 24px;
+  font-weight: 600;
+  text-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+}
+
+.completion-message p {
+  margin: 0;
+  font-size: 16px;
+  opacity: 0.8;
+  line-height: 1.4;
+}
+
+.continue-btn {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  padding: 12px 24px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 16px;
+  font-family: sans-serif;
+  font-weight: 500;
+  transition: all 0.3s ease;
+  text-shadow: 0 0 3px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+}
+
+.continue-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+}
+
+.continue-btn:active {
+  transform: translateY(0);
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 </style> 

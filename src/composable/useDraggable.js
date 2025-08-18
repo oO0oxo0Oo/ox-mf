@@ -27,7 +27,6 @@ export function useDraggable(targetRef, options={}) {
     
     const drag = {
         start: (event) => {
-            console.log('Drag start event:', event.type, event);
             
             if (event.type == "mousedown" && event.which != 1) return;
             if (event.type == "touchstart" && event.touches.length > 1) return;
@@ -72,7 +71,6 @@ export function useDraggable(targetRef, options={}) {
     }
 
     function enable() {
-        console.log('Enabling draggable on container:', container);
         container.addEventListener("touchstart", drag.start, false);
         container.addEventListener("mousedown", drag.start, false);   
     }
