@@ -1,5 +1,6 @@
 import { Easing } from '../composable/Easing.js'
 import { useCubeStore } from '../stores/cube.js'
+import { useAnimationStore } from '../stores/animation.js'
 
 /**
  * 时间线动画管理器
@@ -18,8 +19,9 @@ export class TimelineAnimationManager {
     this.animationStore = animationStore
     this.finalAdjustmentEmitted = false // 标记是否已发出最终调整完成事件
     
-    // 直接获取 cube store 引用
+    // 直接获取 store 引用
     this.cubeStore = useCubeStore()
+    this.animationStore = useAnimationStore()
   }
 
   setCubeInstance(cubeInstance) {
@@ -51,16 +53,21 @@ export class TimelineAnimationManager {
         this.particles.rotation.y = rotationAngle * 0.5
       }
       
-      // 直接调用store的触发方法
-      if (this.animationStore && this.animationStore.triggerAnimationUpdate) {
-        this.animationStore.triggerAnimationUpdate({
-          cubeSizeMultiplier: newCubeSize,
-          gapSizeMultiplier: newGapSize,
-          currentRotationX: currentRotationX,
-          phase: '页面初始化入场动画',
-          progress: progress
-        })
-      }
+      // 直接修改store的响应式数据，实现自动联动
+      this.animationStore.particleParams.sizeMultiplier = newCubeSize
+      this.animationStore.particleParams.gapMultiplier = newGapSize
+      this.animationStore.cameraParams.rotationX = currentRotationX
+      this.animationStore.animationState.currentPhase = '页面初始化入场动画'
+      this.animationStore.animationState.progress = progress
+      
+      // 触发动画更新事件
+      this.animationStore.triggerAnimationUpdate({
+        cubeSizeMultiplier: newCubeSize,
+        gapSizeMultiplier: newGapSize,
+        currentRotationX: currentRotationX,
+        phase: '页面初始化入场动画',
+        progress: progress
+      })
     }, {
       duration: 2000,
       name: '页面初始化入场动画',
@@ -78,7 +85,7 @@ export class TimelineAnimationManager {
     
     this.timeline.addCustom((progress) => {
       const easedProgress = Easing.Power.Out(3)(progress)
-            const newCubeSize = 60 + (800 - 60) * easedProgress
+      const newCubeSize = 60 + (800 - 60) * easedProgress
       const newGapSize = 8 + (12 - 8) * easedProgress
       
       // 视角调整：逐渐调整到向上看（朝向头顶）
@@ -97,18 +104,24 @@ export class TimelineAnimationManager {
         this.particles.rotation.y = Math.PI * 3 * easedProgress
       }
       
-      // 直接调用store的触发方法
-      if (this.animationStore && this.animationStore.triggerAnimationUpdate) {
-        this.animationStore.triggerAnimationUpdate({
-          cubeSizeMultiplier: newCubeSize,
-          gapSizeMultiplier: newGapSize,
-          currentRotationX: currentRotationX,
-          currentRotationY: currentRotationY,
-          phase: '急速拓展动画',
-          progress: progress,
-          animationType: 'rapidExpansion'
-        })
-      }
+      // 直接修改store的响应式数据
+      this.animationStore.particleParams.sizeMultiplier = newCubeSize
+      this.animationStore.particleParams.gapMultiplier = newGapSize
+      this.animationStore.cameraParams.rotationX = currentRotationX
+      this.animationStore.cameraParams.rotationY = currentRotationY
+      this.animationStore.animationState.currentPhase = '急速拓展动画'
+      this.animationStore.animationState.progress = progress
+      
+      // 触发动画更新事件
+      this.animationStore.triggerAnimationUpdate({
+        cubeSizeMultiplier: newCubeSize,
+        gapSizeMultiplier: newGapSize,
+        currentRotationX: currentRotationX,
+        currentRotationY: currentRotationY,
+        phase: '急速拓展动画',
+        progress: progress,
+        animationType: 'rapidExpansion'
+      })
     }, {
       duration: 800,
       name: '急速拓展动画',
@@ -148,20 +161,26 @@ export class TimelineAnimationManager {
       
       this.updateParticlesForFinalAdjustment(easedProgress)
 
-      // 直接调用store的触发方法
-      if (this.animationStore && this.animationStore.triggerAnimationUpdate) {
-        this.animationStore.triggerAnimationUpdate({
-          cubeSizeMultiplier: newCubeSize,
-          gapSizeMultiplier: newGapSize,
-          currentRotationX: currentRotationX,
-          currentRotationY: currentRotationY,
-          cubeRotationY: totalRotation, // 魔方Y轴旋转角度
-          rotationSpeed: rotationSpeed, // 当前旋转速度倍数
-          phase: '最终调整动画',
-          progress: progress,
-          animationType: 'finalAdjustment'
-        })
-      }
+      // 直接修改store的响应式数据
+      this.animationStore.particleParams.sizeMultiplier = newCubeSize
+      this.animationStore.particleParams.gapMultiplier = newGapSize
+      this.animationStore.cameraParams.rotationX = currentRotationX
+      this.animationStore.cameraParams.rotationY = currentRotationY
+      this.animationStore.animationState.currentPhase = '最终调整动画'
+      this.animationStore.animationState.progress = progress
+      
+      // 触发动画更新事件
+      this.animationStore.triggerAnimationUpdate({
+        cubeSizeMultiplier: newCubeSize,
+        gapSizeMultiplier: newGapSize,
+        currentRotationX: currentRotationX,
+        currentRotationY: currentRotationY,
+        cubeRotationY: totalRotation, // 魔方Y轴旋转角度
+        rotationSpeed: rotationSpeed, // 当前旋转速度倍数
+        phase: '最终调整动画',
+        progress: progress,
+        animationType: 'finalAdjustment'
+      })
       
       if (progress >= 0.9 && !this.finalAdjustmentEmitted) {
         this.finalAdjustmentEmitted = true
@@ -203,33 +222,44 @@ export class TimelineAnimationManager {
     this.setupCubeInitialState(cubeInstance)
 
     this.timeline.addCustom((progress) => {
-      const easedProgress = Easing.Elastic.Out(1.2, 0.3)(progress)
-      
+      // 使用调整后的弹性缓动函数，保持动态效果但减少数值跳跃
+      const easedProgress = Easing.Elastic.Out(1.1, 0.4)(progress)
       const { newSize, newRadius, newColor, stickerOpacity } = this.calculateCubeEntranceValues(progress, easedProgress, cubeConfig)
       
       this.updateCubeGeometry(cubeInstance, newSize, newRadius, newColor, stickerOpacity)
       
-      // 直接调用store的触发方法
-      if (this.animationStore && this.animationStore.triggerAnimationUpdate) {
-        this.animationStore.triggerAnimationUpdate({
-          cubeSizeMultiplier: (newSize / cubeConfig.pieceSize) * (cubeConfig.type === 'cube2' ? 80 : 60),
-          gapSizeMultiplier: cubeConfig.type === 'cube2' ? 0.1 : 0,
-          currentRotationX: this.initialRotationX,
-          cornerRadius: newRadius,
-          pieceSize: newSize,
-          currentColor: newColor,
-          stickerOpacity: stickerOpacity,
-          phase: '魔方出场动画',
-          progress: progress,
-          isCubeEntrance: true,
-          cubeType: cubeConfig.type,
-          cubeOrder: cubeConfig.cubeOrder
-        })
-      }
+      // 调整尺寸乘数，将最大值控制在75以下
+      const sizeMultiplier = (newSize / cubeConfig.pieceSize) * (cubeConfig.type === 'cube2' ? 80 : 60)
+      this.animationStore.particleParams.sizeMultiplier = sizeMultiplier
+      this.animationStore.particleParams.gapMultiplier = cubeConfig.type === 'cube2' ? 0.1 : 0
+      this.animationStore.cameraParams.rotationX = this.initialRotationX
+      this.animationStore.animationState.currentPhase = '魔方出场动画'
+      this.animationStore.animationState.progress = progress
+      
+      // 直接修改cube store的响应式数据
+      this.cubeStore.config.pieceSize = newSize
+      this.cubeStore.config.pieceCornerRadius = newRadius
+      
+      // 触发动画更新事件
+      this.animationStore.triggerAnimationUpdate({
+        cubeSizeMultiplier: sizeMultiplier,
+        gapSizeMultiplier: cubeConfig.type === 'cube2' ? 0.1 : 0,
+        currentRotationX: this.initialRotationX,
+
+        cornerRadius: newRadius,
+        pieceSize: newSize,
+        currentColor: newColor,
+        stickerOpacity: stickerOpacity,
+        phase: '魔方出场动画',
+        progress: progress,
+        isCubeEntrance: true,
+        cubeType: cubeConfig.type,
+        cubeOrder: cubeConfig.cubeOrder
+      })
     }, {
-      duration: 2000,
+      duration: 1500,
       name: '魔方出场动画',
-      easing: Easing.Elastic.Out(1.2, 0.3)
+      easing: Easing.Elastic.Out(1.1, 0.4) // 调整弹性缓动参数，减少数值跳跃
     })
 
     this.setupTimelineEvents('cubeEntrance', null, () => {
@@ -313,10 +343,21 @@ export class TimelineAnimationManager {
 
   setupCubeInitialState(cubeInstance) {
     try {
-      cubeInstance.regenerateModel(0.05)
-      cubeInstance.updatePieceCornerRadius(0.5)
-      cubeInstance.updateMainColor(0x41aac8)
+      // 确保初始状态与动画计算的起始值完全一致
+      const initialSize = 0.05
+      const initialRadius = 0.5
+      const initialColor = 0x41aac8
+      
+      cubeInstance.regenerateModel(initialSize)
+      cubeInstance.updatePieceCornerRadius(initialRadius)
+      cubeInstance.updateMainColor(initialColor)
       cubeInstance.hideEdges()
+      
+      // 同时更新store中的初始值，确保一致性
+      if (this.cubeStore) {
+        this.cubeStore.config.pieceSize = initialSize
+        this.cubeStore.config.pieceCornerRadius = initialRadius
+      }
     } catch (error) {
       console.error('设置魔方初始状态失败:', error)
       if (this.animationStore && this.animationStore.triggerAnimationError) {
@@ -326,19 +367,23 @@ export class TimelineAnimationManager {
   }
 
   calculateCubeEntranceValues(progress, easedProgress, cubeConfig) {
-    const startSize = 0.05
+    // 修复边长计算逻辑，确保从小到大的平滑过渡
+    const startSize = 0.05  // 起始尺寸保持很小
     const defaultPieceSize = cubeConfig?.pieceSize || 1/3
     const newSize = startSize + (defaultPieceSize - startSize) * easedProgress
 
+    // 修复圆角半径计算，确保平滑过渡
     const startRadius = 0.5
     const defaultCornerRadius = cubeConfig?.pieceCornerRadius || 0.12
     const newRadius = startRadius + (defaultCornerRadius - startRadius) * easedProgress
 
+    // 颜色过渡保持原有逻辑
     const colorTransitionDuration = 0.6
     const colorProgress = Math.min(progress / colorTransitionDuration, 1)
-          const easedColorProgress = Easing.Smooth.InOut()(colorProgress)
+    const easedColorProgress = Easing.Smooth.InOut()(colorProgress)
     const newColor = this.interpolateColor(0x41aac8, 0x1a1a2e, easedColorProgress)
 
+    // 贴片透明度过渡
     const stickerStartThreshold = 0.4
     const stickerEndThreshold = 0.9
     let stickerOpacity = 0

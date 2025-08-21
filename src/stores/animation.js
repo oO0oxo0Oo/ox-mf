@@ -7,7 +7,7 @@ export const useAnimationStore = defineStore('animation', () => {
   // ===== 获取cube store引用 =====
   const cubeStore = useCubeStore()
   
-  // ===== 状态定义 =====
+  // ===== 状态定义 - 直接暴露响应式引用 =====
   
   // 粒子视觉效果参数
   const particleParams = ref({
@@ -62,7 +62,6 @@ export const useAnimationStore = defineStore('animation', () => {
       particleParams.value.sizeMultiplier = 60
       particleParams.value.gapMultiplier = 0
     }
-
   }
   
   // ===== 计算属性 =====
@@ -109,55 +108,6 @@ export const useAnimationStore = defineStore('animation', () => {
   function setAnimationManager(managerInstance) {
     instances.value.animationManager = managerInstance
   }
-  
-  // ===== 统一更新方法 =====
-  
-  function updateFromAnimationData(data) {
-    // 更新粒子参数
-    if (data.cubeSizeMultiplier !== undefined) {
-      particleParams.value.sizeMultiplier = data.cubeSizeMultiplier
-    }
-    if (data.gapSizeMultiplier !== undefined) {
-      particleParams.value.gapMultiplier = data.gapSizeMultiplier
-    }
-    
-    // 更新相机参数
-    if (data.currentRotationX !== undefined) {
-      cameraParams.value.rotationX = data.currentRotationX
-    }
-    if (data.currentRotationY !== undefined) {
-      cameraParams.value.rotationY = data.currentRotationY
-    }
-    
-    // 更新魔方参数（同步到 cubeStore）
-    if (data.cornerRadius !== undefined) {
-      cubeStore.setPieceCornerRadius(data.cornerRadius)
-    }
-    
-    // 更新动画状态
-    if (data.phase) {
-      animationState.value.currentPhase = data.phase
-    }
-    if (data.progress !== undefined) {
-      animationState.value.progress = data.progress
-    }
-  }
-  
-  // ===== 便利更新方法 =====
-  
-  function updateParticleParams(updates) {
-    Object.assign(particleParams.value, updates)
-  }
-  
-  function updateCameraParams(updates) {
-    Object.assign(cameraParams.value, updates)
-  }
-  
-  function updateAnimationState(updates) {
-    Object.assign(animationState.value, updates)
-  }
-  
-
   
   // ===== 动画控制方法 =====
   
@@ -217,8 +167,6 @@ export const useAnimationStore = defineStore('animation', () => {
     }
   }
   
-
-  
   // 控制方法
   function pauseAnimation() {
     const timeline = instances.value.timeline
@@ -259,13 +207,6 @@ export const useAnimationStore = defineStore('animation', () => {
         rotationY: 0,
         radius: 8
       })
-      // 重置魔方参数
-      cubeStore.updateCubeGeometry({
-        pieceSize: 1/3,
-        pieceCornerRadius: 0.12,
-        edgeCornerRoundness: 0.08,
-        edgeScale: 1.0
-      })
     }
   }
   
@@ -290,12 +231,12 @@ export const useAnimationStore = defineStore('animation', () => {
   // ===== 导出 =====
   
   return {
-    // ===== 状态（新结构） =====
-    particleParams,
-    cameraParams,
-    animationState,
+    // ===== 状态（直接暴露响应式引用） =====
+    particleParams,      // 直接暴露，timeline可以直接修改
+    cameraParams,        // 直接暴露，timeline可以直接修改
+    animationState,      // 直接暴露，timeline可以直接修改
     instances,
-    animationEvents, // 新增：动画事件状态
+    animationEvents,     // 新增：动画事件状态
     
     // ===== 计算属性 =====
     animationInfo,
@@ -306,11 +247,7 @@ export const useAnimationStore = defineStore('animation', () => {
     setTimeline,
     setAnimationManager,
     
-    // 状态更新
-    updateParticleParams,
-    updateCameraParams,
-    updateAnimationState,
-    updateFromAnimationData,
+    // 同步方法
     updateCubeParamsFromStore,
     
     // 动画控制

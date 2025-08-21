@@ -142,6 +142,50 @@ export function useCube(scene) {
 		});
 	};
 
+	// ========== 二阶魔方特有的方法 ==========
+
+	// 根据当前魔方朝向获取对应的层（考虑魔方旋转）
+	function getLayerByCurrentOrientation(face) {
+		if (!pieces || pieces.length === 0) return [];
+
+		const layer = [];
+		const faceMap = {
+			U: { axis: "y", value: 1 },
+			D: { axis: "y", value: -1 },
+			L: { axis: "x", value: -1 },
+			R: { axis: "x", value: 1 },
+			F: { axis: "z", value: 1 },
+			B: { axis: "z", value: -1 },
+		};
+
+		const faceConfig = faceMap[face];
+		if (!faceConfig) return [];
+
+		// 确保所有矩阵都是最新的
+		holder.updateMatrixWorld(true);
+
+		pieces.forEach((piece, index) => {
+			if (!piece) return;
+
+			// 获取魔方块的真正世界坐标位置
+			if (!piece.matrixWorld) return;
+			
+			// 获取魔方块的世界坐标
+			let worldPosition = new THREE.Vector3()
+				.setFromMatrixPosition(piece.matrixWorld)
+				.multiplyScalar(4); // 二阶魔方缩放倍数为4
+
+			// 检查魔方块是否在指定面上
+			const axisValue = Math.round(worldPosition[faceConfig.axis]);
+			
+			if (axisValue === faceConfig.value) {
+				layer.push(index);
+			}
+		});
+
+		return layer;
+	}
+
 	return {
 		// 状态
 		geometry: cube.geometry,
@@ -176,6 +220,9 @@ export function useCube(scene) {
 		getScrambleState: cube.getScrambleState.bind(cube),
 		stopScramble: cube.stopScramble.bind(cube),
 
+		// 二阶魔方特有的方法
+		getLayerByCurrentOrientation,
+
 		// 贴片可见性控制 - 继承自CubeInterface
 		hideEdges: cube.hideEdges.bind(cube),
 		showEdges: cube.showEdges.bind(cube),
@@ -192,5 +239,21 @@ export function useCube(scene) {
 		// 主体颜色控制 - 继承自CubeInterface
 		updateMainColor: cube.updateMainColor.bind(cube),
 		getMainColor: cube.getMainColor.bind(cube),
+
+		// 主题颜色支持
+		themeColors: null,
+		updateColors: function(colors) {
+			this.themeColors = colors
+			// 更新所有边的颜色
+			if (this.edges && this.edges.length > 0) {
+				const faceNames = ['L', 'R', 'D', 'U', 'B', 'F']
+				this.edges.forEach(edge => {
+					const faceIndex = faceNames.indexOf(edge.name)
+					if (faceIndex !== -1 && colors[edge.name]) {
+						edge.material.color.setHex(colors[edge.name])
+					}
+				})
+			}
+		}
 	};
 }

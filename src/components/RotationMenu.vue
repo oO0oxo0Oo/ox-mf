@@ -1,10 +1,19 @@
 <script setup>
 import { useRotationQueueStore } from "../stores/rotationQueue";
 import { useCubeStore } from "../stores/cube";
-import { computed } from "vue";
+import { useGameStore } from "../stores/game";
+import { computed, ref, watch } from "vue";
+import { getThemeColors } from "../config/themes.js";
 
 const rotationQueueStore = useRotationQueueStore();
 const cubeStore = useCubeStore();
+const gameStore = useGameStore();
+
+// 控制状态
+const isDraggingEnabled = ref(true);
+
+// 定义事件
+const emit = defineEmits(['toggle-dragging', 'reset-cube']);
 
 const scramble = () => {
 	cubeStore.scrambleCube();
@@ -13,6 +22,16 @@ const solve = () =>{
 	console.log(cubeStore.solve(),"!!!!!!")
 }
 
+// 禁用/启用拖拽
+const toggleDragging = () => {
+	isDraggingEnabled.value = !isDraggingEnabled.value;
+	emit('toggle-dragging', isDraggingEnabled.value);
+}
+
+// 还原魔方
+const resetCube = () => {
+	emit('reset-cube');
+}
 
 
 // 定义点击处理函数
@@ -21,51 +40,119 @@ const handleRotate = (face, direction = 1) => {
 };
 
 // 旋转按钮配置 - 上下两行布局
-const topRowButtons = [
-	{ face: 'U', direction: 1, label: 'U', color: '#FFD700' },
-	{ face: 'U', direction: -1, label: "U'", color: '#FFD700' },
-	{ face: 'D', direction: 1, label: 'D', color: '#FFFFFF' },
-	{ face: 'D', direction: -1, label: "D'", color: '#FFFFFF' },
-	{ face: 'L', direction: 1, label: 'L', color: '#FF8C00' },
-	{ face: 'L', direction: -1, label: "L'", color: '#FF8C00' },
-];
+const topRowButtons = computed(() => [
+	{ face: 'U', direction: 1, label: 'U', color: getFaceColor('U') },
+	{ face: 'U', direction: -1, label: "U'", color: getFaceColor('U') },
+	{ face: 'D', direction: 1, label: 'D', color: getFaceColor('D') },
+	{ face: 'D', direction: -1, label: "D'", color: getFaceColor('D') },
+	{ face: 'L', direction: 1, label: 'L', color: getFaceColor('L') },
+	{ face: 'L', direction: -1, label: "L'", color: getFaceColor('L') },
+]);
 
-const bottomRowButtons = [
-	{ face: 'R', direction: 1, label: 'R', color: '#FF0000' },
-	{ face: 'R', direction: -1, label: "R'", color: '#FF0000' },
-	{ face: 'F', direction: 1, label: 'F', color: '#00FF00' },
-	{ face: 'F', direction: -1, label: "F'", color: '#00FF00' },
-	{ face: 'B', direction: 1, label: 'B', color: '#0000FF' },
-	{ face: 'B', direction: -1, label: "B'", color: '#0000FF' },
-];
+const bottomRowButtons = computed(() => [
+	{ face: 'R', direction: 1, label: 'R', color: getFaceColor('R') },
+	{ face: 'R', direction: -1, label: "R'", color: getFaceColor('R') },
+	{ face: 'F', direction: 1, label: 'F', color: getFaceColor('F') },
+	{ face: 'F', direction: -1, label: "F'", color: getFaceColor('F') },
+	{ face: 'B', direction: 1, label: 'B', color: getFaceColor('B') },
+	{ face: 'B', direction: -1, label: "B'", color: getFaceColor('B') },
+]);
+
+// 根据当前主题获取面颜色的函数
+function getFaceColor(face) {
+	const currentTheme = cubeStore.getCurrentTheme();
+	// 从主题配置获取颜色
+	const colors = getThemeColors(currentTheme);
+	const hexColor = colors[face];
+	
+	// 将十六进制颜色转换为CSS颜色格式，并添加透明度让颜色更接近魔方
+	const colorHex = `#${hexColor.toString(16).padStart(6, '0')}`;
+	
+	// 根据颜色亮度调整透明度，让按钮颜色更接近魔方
+	if (face === 'U' || face === 'D') {
+		// 白色和黄色使用较低透明度
+		return `${colorHex}CC`; // 80% 透明度
+	} else {
+		// 其他颜色使用中等透明度
+		return `${colorHex}99`; // 60% 透明度
+	}
+}
 
 // 计算属性
 const queueLength = computed(() => rotationQueueStore.queueLength());
 const animationStatus = computed(() => rotationQueueStore.getAnimationEngineStatus());
 const hasCurrentRotation = computed(() => rotationQueueStore.hasCurrentRotation());
+const isRotating = computed(() => rotationQueueStore.hasCurrentRotation());
+
+// 主题相关
+const currentTheme = ref(cubeStore.getCurrentTheme());
+const availableThemes = computed(() => cubeStore.getAvailableThemes());
+const currentThemeName = computed(() => {
+  const theme = availableThemes.value.find(t => t.key === currentTheme.value);
+  return theme ? theme.name : '经典';
+});
+
+// 主题切换处理函数
+const handleThemeChange = () => {
+  console.log('尝试切换主题到:', currentTheme.value);
+  console.log('可用主题:', availableThemes.value);
+  
+  const success = cubeStore.setTheme(currentTheme.value);
+  if (!success) {
+    console.error('主题切换失败:', currentTheme.value);
+    // 如果切换失败，恢复原来的主题
+    currentTheme.value = cubeStore.getCurrentTheme();
+  } else {
+    console.log('主题切换成功:', currentTheme.value);
+  }
+};
+
+// 监听store中主题的变化，同步更新本地状态
+watch(() => cubeStore.config.theme, (newTheme) => {
+  console.log('主题变化监听器触发，新主题:', newTheme);
+  currentTheme.value = newTheme;
+}, { immediate: true });
 </script>
 
 <template>
 	<div class="rotation-menu">
-		<!-- 标题 -->
-		<div class="menu-header">
-			<h3 class="menu-title">魔方控制</h3>
-					<div class="menu-status">
-			<span class="queue-info" v-if="queueLength > 0">
-				队列: {{ queueLength }}
-			</span>
-			<span class="animation-status" :class="{ 
-				'status-running': animationStatus.isRunning,
-				'status-paused': animationStatus.isPaused,
-				'status-idle': !animationStatus.isRunning && !animationStatus.isPaused
-			}">
-				{{ animationStatus.isPaused ? '已暂停' : 
-				   animationStatus.isRunning ? '运行中' : '空闲' }}
-			</span>
-			<span class="rotation-status" v-if="hasCurrentRotation">
-				🔄 旋转中
-			</span>
+		<!-- 主题切换下拉菜单 - 左上角 -->
+		<div class="theme-toggle">
+			<select 
+				class="theme-select"
+				v-model="currentTheme"
+				@change="handleThemeChange"
+				:title="`当前主题: ${currentThemeName}`"
+			>
+				<option 
+					v-for="theme in availableThemes" 
+					:key="theme.key" 
+					:value="theme.key"
+				>
+					{{ theme.name }}
+				</option>
+			</select>
 		</div>
+
+		<!-- 控制按钮 - 右上角 -->
+		<div class="control-toggle">
+			<button 
+				class="control-btn"
+				@click="toggleDragging"
+				:title="isDraggingEnabled ? '禁用拖拽' : '启用拖拽'"
+				:class="{ 'disabled': !isDraggingEnabled }"
+			>
+				<span class="btn-icon">{{ isDraggingEnabled ? '👋' : '👊' }}</span>
+				<span class="btn-text">{{ isDraggingEnabled ? '禁用拖拽' : '启用拖拽' }}</span>
+			</button>
+			<button 
+				class="control-btn reset-btn"
+				@click="resetCube"
+				title="还原魔方"
+			>
+				<span class="btn-icon">↩️</span>
+				<span class="btn-text">还原</span>
+			</button>
 		</div>
 
 		<!-- 旋转按钮 - 上下两行布局 -->
@@ -123,14 +210,68 @@ const hasCurrentRotation = computed(() => rotationQueueStore.hasCurrentRotation(
 
 <style scoped>
 .rotation-menu {
-	background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-	border-radius: 16px;
-	padding: 24px;
-	box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+	position: absolute;
+	bottom: 0;
+	left: 0;
+	right: 0;
+	/* background: transparent; */
+	/* border-radius: 16px; */
+	padding: 10px;
+	/* box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
 	backdrop-filter: blur(10px);
-	border: 1px solid rgba(255, 255, 255, 0.2);
+	border: 1px solid rgba(255, 255, 255, 0.2); */
 	max-width: 800px;
 	margin: 0 auto;
+	z-index: 20;
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	gap: 10px;
+}
+
+/* 主题切换下拉菜单样式 */
+.theme-toggle {
+	position: absolute;
+	top: -60px;
+	left: 0;
+}
+
+.theme-select {
+	background: linear-gradient(145deg, rgba(255, 255, 255, 0.15), rgba(255, 255, 255, 0.08));
+	border: 2px solid rgba(255, 255, 255, 0.3);
+	border-radius: 12px;
+	padding: 10px 16px;
+	color: white;
+	font-weight: 500;
+	font-size: 0.9rem;
+	cursor: pointer;
+	transition: all 0.3s ease;
+	backdrop-filter: blur(10px);
+	min-width: 120px;
+	appearance: none;
+	background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6,9 12,15 18,9'%3e%3c/polyline%3e%3c/svg%3e");
+	background-repeat: no-repeat;
+	background-position: right 12px center;
+	background-size: 16px;
+	padding-right: 40px;
+}
+
+.theme-select:hover {
+	background: linear-gradient(145deg, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.12));
+	border-color: rgba(255, 255, 255, 0.5);
+}
+
+.theme-select:focus {
+	outline: none;
+	border-color: rgba(255, 255, 255, 0.7);
+	box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.1);
+}
+
+.theme-select option {
+	background: rgba(0, 0, 0, 0.8);
+	color: white;
+	border: none;
+	padding: 8px;
 }
 
 .menu-header {
@@ -205,15 +346,11 @@ const hasCurrentRotation = computed(() => rotationQueueStore.hasCurrentRotation(
 	}
 }
 
-.rotation-container {
-	margin-bottom: 16px;
-}
-
 .rotation-row {
 	display: flex;
 	justify-content: center;
-	gap: 16px;
-	margin-bottom: 8px;
+	gap: 12px;
+	margin-bottom: 6px;
 }
 
 .rotation-row:last-child {
@@ -222,44 +359,32 @@ const hasCurrentRotation = computed(() => rotationQueueStore.hasCurrentRotation(
 
 .rotation-btn {
 	position: relative;
-	background: linear-gradient(145deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.05));
-	border: 2px solid rgba(255, 255, 255, 0.2);
-	border-radius: 12px;
-	padding: 20px 12px;
-	color: white;
-	font-weight: 600;
-	font-size: 1.1rem;
+	background: var(--btn-color);
+	border: 2px solid rgba(0, 0, 0, 0.3);
+	border-radius: 10px;
+	padding: 12px 8px;
+	color: #000;
+	font-weight: 700;
+	font-size: 1rem;
 	cursor: pointer;
 	transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 	overflow: hidden;
 	display: flex;
 	flex-direction: column;
 	align-items: center;
-	gap: 6px;
-	min-height: 70px;
-	min-width: 70px;
+	gap: 4px;
+	min-height: 50px;
+	min-width: 50px;
+	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
 }
 
-.rotation-btn::before {
-	content: '';
-	position: absolute;
-	top: 0;
-	left: 0;
-	right: 0;
-	bottom: 0;
-	background: linear-gradient(45deg, var(--btn-color), transparent);
-	opacity: 0.3;
-	transition: opacity 0.3s ease;
-}
-
-.rotation-btn:hover::before {
-	opacity: 0.5;
-}
+/* 移除之前的伪元素样式，现在使用纯色背景 */
 
 .rotation-btn:hover {
 	transform: translateY(-2px);
-	box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
-	border-color: rgba(255, 255, 255, 0.4);
+	box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+	border-color: rgba(0, 0, 0, 0.5);
+	filter: brightness(1.1);
 }
 
 .rotation-btn:active {
@@ -280,8 +405,9 @@ const hasCurrentRotation = computed(() => rotationQueueStore.hasCurrentRotation(
 .btn-label {
 	position: relative;
 	z-index: 1;
-	font-size: 1.4rem;
-	text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+	font-size: 1.1rem;
+	font-weight: 700;
+	text-shadow: 0 1px 2px rgba(255, 255, 255, 0.8);
 }
 
 .btn-primary {
@@ -290,7 +416,7 @@ const hasCurrentRotation = computed(() => rotationQueueStore.hasCurrentRotation(
 
 .btn-secondary {
 	border-color: rgba(255, 255, 255, 0.2);
-	background: linear-gradient(145deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.03));
+	/* 移除background，让CSS变量生效 */
 }
 
 .control-buttons {
@@ -335,10 +461,88 @@ const hasCurrentRotation = computed(() => rotationQueueStore.hasCurrentRotation(
 	background: linear-gradient(145deg, rgba(255, 107, 107, 0.1), rgba(255, 107, 107, 0.05));
 }
 
+.control-toggle {
+	position: absolute;
+	top: -60px;
+	right: 0;
+	display: flex;
+	gap: 10px;
+}
 
+.control-toggle .control-btn {
+	background: linear-gradient(145deg, rgba(255, 255, 255, 0.15), rgba(255, 255, 255, 0.08));
+	border: 2px solid rgba(255, 255, 255, 0.3);
+	border-radius: 12px;
+	padding: 10px 16px;
+	color: white;
+	font-weight: 500;
+	font-size: 0.9rem;
+	cursor: pointer;
+	transition: all 0.3s ease;
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	backdrop-filter: blur(10px);
+}
+
+.control-toggle .control-btn:hover {
+	background: linear-gradient(145deg, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.12));
+	transform: translateY(-2px);
+	box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+	border-color: rgba(255, 255, 255, 0.5);
+}
+
+.control-toggle .control-btn.disabled {
+	opacity: 0.6;
+	background: linear-gradient(145deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.05));
+}
+
+.control-toggle .control-btn.disabled:hover {
+	transform: none;
+	box-shadow: none;
+}
+
+.control-toggle .btn-icon {
+	font-size: 1.2rem;
+}
+
+.control-toggle .btn-text {
+	font-size: 0.85rem;
+}
+
+.control-btn.reset-btn {
+	background: linear-gradient(145deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.05));
+	border: 2px solid rgba(255, 255, 255, 0.2);
+	border-radius: 10px;
+	padding: 12px 20px;
+	color: white;
+	font-weight: 500;
+	font-size: 0.9rem;
+	cursor: pointer;
+	transition: all 0.3s ease;
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.control-btn.reset-btn:hover {
+	background: linear-gradient(145deg, rgba(255, 255, 255, 0.15), rgba(255, 255, 255, 0.08));
+	transform: translateY(-1px);
+	box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+}
+
+.control-btn.reset-btn:disabled {
+	opacity: 0.5;
+	cursor: not-allowed;
+	transform: none;
+}
 
 .btn-icon {
 	font-size: 1rem;
+}
+
+.btn-text {
+	font-size: 0.85rem;
 }
 
 /* 动画 */
@@ -353,6 +557,30 @@ const hasCurrentRotation = computed(() => rotationQueueStore.hasCurrentRotation(
 	.rotation-menu {
 		padding: 16px;
 		max-width: 100%;
+		flex-direction: column;
+		align-items: flex-start;
+		gap: 10px;
+	}
+	
+	.theme-toggle {
+		position: static;
+		top: auto;
+		left: auto;
+		width: 100%;
+	}
+	
+	.theme-select {
+		width: 100%;
+		min-width: auto;
+	}
+
+	.control-toggle {
+		position: static;
+		top: auto;
+		right: auto;
+		flex-direction: row;
+		justify-content: space-between;
+		width: 100%;
 	}
 	
 	.rotation-row {
@@ -361,11 +589,11 @@ const hasCurrentRotation = computed(() => rotationQueueStore.hasCurrentRotation(
 	}
 	
 	.rotation-btn {
-		padding: 16px 8px;
-		min-height: 60px;
-		min-width: 60px;
+		padding: 10px 6px;
+		min-height: 45px;
+		min-width: 45px;
 		flex: 1;
-		max-width: 70px;
+		max-width: 55px;
 	}
 	
 	.btn-label {

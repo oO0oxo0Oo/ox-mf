@@ -18,7 +18,7 @@ export function useCube(scene) {
 	// 获取引用
 	const { pieces, edges, positions, holder, object, animator, group } = cube;
 
-	// ========== 三阶魔方特有的抽象方法实现 ==========
+	// ========== 三阶魔方基础配置方法 ==========
 
 	// 获取缩放倍数（三阶魔方为3）
 	cube.getScaleMultiplier = function() {
@@ -29,6 +29,8 @@ export function useCube(scene) {
 	cube.getDimensions = function() {
 		return 3;
 	};
+
+	// ========== 三阶魔方几何生成方法 ==========
 
 	// 生成位置数据
 	cube.generatePositions = function(customPieceSize = null) {
@@ -88,15 +90,18 @@ export function useCube(scene) {
 			piece.edgesName = "";
 
 			position.edges.forEach((position) => {
-				// 为每个面设置不同的颜色
-				const colors = [
+				// 为每个面设置不同的颜色 - 使用主题颜色或默认颜色
+				const faceNames = ["L", "R", "D", "U", "B", "F"];
+				const defaultColors = [
 					0xff0000, 0xff8c00, 0xffff00, 0x00ff00, 0x0000ff, 0xffffff,
 				]; // 红橙黄绿蓝白
+				const faceName = faceNames[position];
+				const color = cube.themeColors?.[faceName] || defaultColors[position];
 				const edgeMaterial = new THREE.MeshLambertMaterial({
-					color: colors[position],
+					color: color,
 				});
 				const edge = new THREE.Mesh(edgeGeometry, edgeMaterial);
-				const name = ["L", "R", "D", "U", "B", "F"][position];
+				const name = faceName;
 				const distance = pieceSize / 2;
 
 				edge.position.set(
@@ -136,7 +141,7 @@ export function useCube(scene) {
 		});
 	};
 
-	// ========== 三阶魔方特有的方法 ==========
+	// ========== 三阶魔方层操作方法 ==========
 
 	// 根据当前魔方朝向获取对应的层（考虑魔方旋转）
 	function getLayerByCurrentOrientation(face) {
@@ -180,29 +185,7 @@ export function useCube(scene) {
 		return layer;
 	}
 
-	function getCubeState(){
-		// 生成魔方状态字符串
-		const stateString = getCubeStateString();
-
-		// 使用新的getFaceOrientationInfo函数获取详细信息
-		const orientationInfo = getFaceOrientationInfo();
-		
-		orientationInfo.forEach((pieceInfo) => {
-			if (pieceInfo.faces.length > 0) {
-				pieceInfo.faces.forEach((face) => {
-				});
-			} else {
-				// console.log("  这是一个中心块，没有彩色面");
-			}
-		});
-		
-		pieces.forEach((piece, index) => {
-			let piecePosition = cube.getPiecePosition(piece);
-		});
-		
-		// 返回魔方状态字符串
-		return stateString;
-	}
+	// ========== 三阶魔方面朝向分析方法 ==========
 
 	// 根据面的实际朝向确定它当前代表哪个面（世界坐标系）
 	function getCurrentFaceOrientation(piece, face) {
@@ -283,6 +266,8 @@ export function useCube(scene) {
 		return orientationInfo;
 	}
 
+	// ========== 三阶魔方状态管理方法 ==========
+
 	// 生成魔方状态字符串 (UUUUUUUUURRRRRRRRRFFFFFFFFFFDDDDDDDDDLLLLLLLLLLBBBBBBBBB)
 	function getCubeStateString() {
 		const faceMap = {
@@ -294,79 +279,68 @@ export function useCube(scene) {
 			'F': { name: '前面', color: '白色', hexColor: 0xffffff, char: 'F' }
 		};
 
-		// 初始化6个面的数组，每个面9个位置
-		const faces = {
-			'U': new Array(9).fill(''),
-			'R': new Array(9).fill(''),
-			'F': new Array(9).fill(''),
-			'D': new Array(9).fill(''),
-			'L': new Array(9).fill(''),
-			'B': new Array(9).fill('')
-		};
-
-		// 遍历所有魔方小块
-		pieces.forEach((piece) => {
-			const piecePosition = cube.getPiecePosition(piece);
-			
-			// 遍历每个小块的面
-			piece.children.forEach((face) => {
-				if (face.name && faceMap[face.name]) {
-					// 获取面的当前朝向（世界坐标系）
-					const currentOrientation = getCurrentFaceOrientation(piece, face);
-					
-					if (currentOrientation && faceMap[currentOrientation]) {
-						// 根据小块位置确定在面中的索引
-						const faceIndex = getFaceIndex(piecePosition, currentOrientation);
-						
-						if (faceIndex !== -1) {
-							// 获取颜色字符
-							const colorChar = faceMap[face.name].char;
-							faces[currentOrientation][faceIndex] = colorChar;
-						}
+		const stateString = [];
+		
+		// 按照标准魔方状态字符串的顺序：U, R, F, D, L, B
+		const faceOrder = ['U', 'R', 'F', 'D', 'L', 'B'];
+		
+		faceOrder.forEach(face => {
+			const facePieces = getLayerByCurrentOrientation(face);
+			facePieces.forEach(pieceIndex => {
+				const piece = pieces[pieceIndex];
+				if (piece && piece.children) {
+					// 找到对应面的颜色
+					const faceChild = piece.children.find(child => child.name === face);
+					if (faceChild) {
+						stateString.push(faceMap[face].char);
 					}
 				}
 			});
 		});
-
-		// 按顺序拼接：U R F D L B
-		const stateString = faces.U.join('') + faces.R.join('') + faces.F.join('') + 
-						   faces.D.join('') + faces.L.join('') + faces.B.join('');
 		
+		return stateString.join('');
+	}
+
+	// 获取魔方状态
+	function getCubeState(){
+		// 生成魔方状态字符串
+		const stateString = getCubeStateString();
+
+		// 使用新的getFaceOrientationInfo函数获取详细信息
+		const orientationInfo = getFaceOrientationInfo();
+		
+		orientationInfo.forEach((pieceInfo) => {
+			if (pieceInfo.faces.length > 0) {
+				pieceInfo.faces.forEach((face) => {
+				});
+			} else {
+				// console.log("  这是一个中心块，没有彩色面");
+			}
+		});
+		
+		pieces.forEach((piece, index) => {
+			let piecePosition = cube.getPiecePosition(piece);
+		});
+		
+		// 返回魔方状态字符串
 		return stateString;
 	}
 
-	// 根据小块位置和面朝向确定在面中的索引
-	function getFaceIndex(piecePosition, faceOrientation) {
-		// 面的索引映射（从左上角开始，按行排列）
-		// 0 1 2
-		// 3 4 5
-		// 6 7 8
-		
-		const x = piecePosition.x;
-		const y = piecePosition.y;
-		const z = piecePosition.z;
-		
-		switch (faceOrientation) {
-			case 'U': // 上面 (y = 1)
-				if (y !== 1) return -1;
-				return (1 - z) * 3 + (x + 1);
-			case 'D': // 下面 (y = -1)
-				if (y !== -1) return -1;
-				return (z + 1) * 3 + (x + 1);
-			case 'L': // 左面 (x = -1)
-				if (x !== -1) return -1;
-				return (1 - z) * 3 + (y + 1);
-			case 'R': // 右面 (x = 1)
-				if (x !== 1) return -1;
-				return (z + 1) * 3 + (y + 1);
-			case 'F': // 前面 (z = 1)
-				if (z !== 1) return -1;
-				return (1 - y) * 3 + (x + 1);
-			case 'B': // 后面 (z = -1)
-				if (z !== -1) return -1;
-				return (y + 1) * 3 + (1 - x);
-			default:
-				return -1;
+	// ========== 三阶魔方主题管理方法 ==========
+
+	// 主题颜色支持
+	let themeColors = null;
+	function updateColors(colors) {
+		themeColors = colors
+		// 更新所有边的颜色
+		if (edges && edges.length > 0) {
+			const faceNames = ['L', 'R', 'D', 'U', 'B', 'F']
+			edges.forEach(edge => {
+				const faceIndex = faceNames.indexOf(edge.name)
+				if (faceIndex !== -1 && colors[edge.name]) {
+					edge.material.color.setHex(colors[edge.name])
+				}
+			})
 		}
 	}
 
@@ -425,5 +399,21 @@ export function useCube(scene) {
 		// 主体颜色控制 - 继承自CubeInterface
 		updateMainColor: cube.updateMainColor.bind(cube),
 		getMainColor: cube.getMainColor.bind(cube),
+
+		// 主题颜色支持
+		themeColors: null,
+		updateColors: function(colors) {
+			this.themeColors = colors
+			// 更新所有边的颜色
+			if (this.edges && this.edges.length > 0) {
+				const faceNames = ['L', 'R', 'D', 'U', 'B', 'F']
+				this.edges.forEach(edge => {
+					const faceIndex = faceNames.indexOf(edge.name)
+					if (faceIndex !== -1 && colors[edge.name]) {
+						edge.material.color.setHex(colors[edge.name])
+					}
+				})
+			}
+		}
 	};
 }

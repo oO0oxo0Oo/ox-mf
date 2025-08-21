@@ -1,5 +1,6 @@
 import { useCube as useCube3 } from './cube3.js';
 import { useCube as useCube2 } from './cube2.js';
+import { useCube as useCube4 } from './cube4.js';
 
 const createCubeFactory = () => {
   const cubeTypes = new Map();
@@ -25,6 +26,7 @@ const createCubeFactory = () => {
   // 注册魔方类型
   register('cube3', useCube3);
   register('cube2', useCube2);
+  register('cube4', useCube4);
 
   return {
     register,

@@ -20,28 +20,15 @@
       <World ref="worldComponent" />
     </div>
 
-    <!-- 贴片可见性控制按钮 -->
-    <div class="edge-controls">
-      <button 
-        @click="toggleEdges" 
-        class="edge-btn"
-        :class="{ 'active': edgesVisible }"
-      >
-        {{ edgesVisible ? '隐藏贴片' : '显示贴片' }}
-      </button>
-      <button 
-        @click="startAnimation" 
-        class="edge-btn"
-      >
-        开始动画
-      </button>
-    </div>
-    <!-- <RotationMenu /> -->
+    <RotationMenu 
+      @toggle-dragging="handleToggleDragging"
+      @reset-cube="handleResetCube"
+    />
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, watch, onUnmounted } from 'vue'
+import { ref, onMounted, watch, onUnmounted, computed } from 'vue'
 import World from './World.vue'
 import RotationMenu from "./RotationMenu.vue"
 import { useControls } from '../composable/useControls.js'
@@ -49,55 +36,107 @@ import { useGameStore, useCubeStore } from '../stores/index.js'
 import { useAnimationStore } from '../stores/animation.js'
 import { useTimeline } from '../composable/useTimeline.js'
 import { TimelineAnimationManager } from '../animations/timelineAnimations.js'
+import { getThemeColors } from '../config/themes.js'
 
-// 接收魔方配置属性
+// ===== 组件配置 =====
 const props = defineProps({
   cubeConfig: {
     type: Object,
     default: () => ({
       type: 'cube3',
-      style: 'classic'
+      theme: 'classic'
     })
   }
 })
 
+// ===== 响应式引用 =====
 const worldRef = ref(null)
 const worldComponent = ref(null)
-let controls = null
-let cubeInstance = null
 
-// 贴片可见性状态
-const edgesVisible = ref(false)
-
-// Store 实例
+// ===== Store 实例 =====
 const gameStore = useGameStore()
 const cubeStore = useCubeStore()
 const animationStore = useAnimationStore()
 
-// 动画系统
-const timeline = useTimeline()
-let animationManager = null
-
-// 监听魔方边长变化，实时更新魔方
-watch(() => cubeStore.config.pieceSize, (newSize) => {
-  if (cubeInstance && cubeInstance.updatePieceSize) {
-    cubeInstance.updatePieceSize(newSize)
-  }
+// ===== 状态管理 =====
+const state = ref({
+  isInitialized: false,
+  isAnimating: false,
+  controls: null,
+  cubeInstance: null,
+  animationManager: null
 })
 
-// 初始化动画系统
+// ===== 计算属性 =====
+const isReady = computed(() => {
+  return state.value.isInitialized && 
+         state.value.cubeInstance && 
+         worldComponent.value
+})
+
+const canAnimate = computed(() => {
+  return isReady.value && 
+         !state.value.isAnimating && 
+         state.value.animationManager
+})
+
+// ===== 动画系统 =====
+const timeline = useTimeline()
+
+// ===== 响应式监听器 =====
+
+// 监听魔方边长变化，实时更新魔方
+watch(() => cubeStore.config.pieceSize, (newSize, oldSize) => {
+  if (state.value.cubeInstance?.updatePieceSize) {
+    // 现代方式：使用响应式验证
+    if (isValidSize(newSize)) {
+      state.value.cubeInstance.updatePieceSize(newSize)
+    } else {
+      console.warn('接收到无效的魔方尺寸:', newSize)
+    }
+  }
+}, { immediate: false })
+
+// 监听圆角半径变化
+watch(() => cubeStore.config.pieceCornerRadius, (newRadius, oldRadius) => {
+  if (state.value.cubeInstance?.updatePieceCornerRadius) {
+    if (isValidRadius(newRadius)) {
+      state.value.cubeInstance.updatePieceCornerRadius(newRadius)
+    } else {
+      console.warn('接收到无效的圆角半径:', newRadius)
+    }
+  }
+}, { immediate: false })
+
+// 监听主题变化，实时更新魔方颜色
+watch(() => props.cubeConfig.theme, (newTheme) => {
+  if (newTheme && state.value.cubeInstance?.updateColors) {
+    const colors = getThemeColors(newTheme)
+    state.value.cubeInstance.updateColors(colors)
+    
+    // 触发主题切换动画
+    if (canAnimate.value) {
+      triggerThemeSwitchAnimation()
+    }
+  }
+}, { immediate: true })
+
+// ===== 核心方法 =====
+
+// 现代方式：初始化动画系统
 function initAnimationSystem() {
   const worldMethods = gameStore.getWorldMethods()
-  if (!worldMethods || !worldMethods.scene || !worldMethods.camera) {
+  
+  if (!isWorldReady(worldMethods)) {
     console.warn('World场景或相机未准备好，无法初始化动画系统')
-    return
+    return false
   }
 
   // 设置时间线到store
   animationStore.setTimeline(timeline)
   
-  // 创建动画管理器实例（这里没有粒子系统，所以传null）
-  animationManager = new TimelineAnimationManager(
+  // 创建动画管理器实例
+  state.value.animationManager = new TimelineAnimationManager(
     timeline, 
     worldMethods.scene, 
     worldMethods.camera, 
@@ -105,62 +144,125 @@ function initAnimationSystem() {
     8,    // baseRadius
     0,    // initialRotationX
     0,    // initialRotationY
-    cubeInstance, // 魔方实例
-    cubeStore // 传入cube store
+    state.value.cubeInstance,
+    cubeStore
   )
   
   // 设置到store中
-  animationStore.setAnimationManager(animationManager)
+  animationStore.setAnimationManager(state.value.animationManager)
+  
+  console.log('动画系统初始化成功')
+  return true
 }
 
-// 初始化魔方
+// 现代方式：初始化魔方
 function initCube() {
-  if (!worldComponent.value) {
+  if (!isWorldReady()) {
     console.warn('World 组件未准备好')
-    return
+    return false
   }
 
-  const worldMethods = gameStore.getWorldMethods()
-  if (!worldMethods || !worldMethods.scene) {
-    console.warn('World 场景未准备好')
-    return
-  }
-  
   // 根据配置设置魔方类型
   cubeStore.setCubeType(props.cubeConfig.type)
   
+  // 设置主题 - 确保主题在初始化时就被应用
+  if (props.cubeConfig.theme) {
+    cubeStore.setTheme(props.cubeConfig.theme)
+    console.log('初始化时设置主题:', props.cubeConfig.theme)
+  }
+  
   // 使用 store 初始化魔方
+  const worldMethods = gameStore.getWorldMethods()
   cubeStore.initCube(worldMethods.scene)
   
   // 获取魔方实例
-  cubeInstance = cubeStore.getCubeInstance()
+  state.value.cubeInstance = cubeStore.getCubeInstance()
   
   // 初始化控制模块
-  controls = useControls(worldRef, cubeInstance, worldMethods.camera)
-  controls.init()
-  controls.enable() // 启用拖拽控制
+  initControls()
   
   // 默认隐藏贴片
-  cubeInstance.hideEdges()
-  edgesVisible.value = false
+  state.value.cubeInstance.hideEdges()
   
   // 初始化动画系统
-  initAnimationSystem()
+  const animationSuccess = initAnimationSystem()
   
+  if (animationSuccess) {
+    state.value.isInitialized = true
+    console.log('魔方初始化成功')
+    return true
+  }
+  
+  return false
 }
 
-// 切换贴片可见性
-function toggleEdges() {
-  if (cubeInstance) {
-    const isVisible = cubeInstance.toggleEdges()
-    edgesVisible.value = isVisible
+// 现代方式：初始化控制模块
+async function initControls() {
+  if (!state.value.cubeInstance || !worldRef.value) return false
+  
+  const worldMethods = gameStore.getWorldMethods()
+  state.value.controls = useControls(worldRef, state.value.cubeInstance, worldMethods.camera)
+  state.value.controls.init()
+  state.value.controls.enable()
+  return true
+}
+
+// 触发主题切换动画
+function triggerThemeSwitchAnimation() {
+  if (!canAnimate.value) return
+  
+  state.value.isAnimating = true
+  state.value.animationManager.setupCubeEntranceTimeline(state.value.cubeInstance)
+  
+  // 监听动画完成
+  timeline.on('complete', () => {
+    state.value.isAnimating = false
+  })
+}
+
+// ===== 事件处理器 =====
+
+// 处理禁用/启用拖拽
+function handleToggleDragging(enabled) {
+  if (state.value.controls) {
+    if (enabled) {
+      state.value.controls.enable()
+    } else {
+      state.value.controls.disable()
+    }
   }
 }
 
-function startAnimation() {
-  // 使用统一的动画系统启动魔方出场动画
-  animationStore.startAnimation('cubeEntrance', cubeInstance)
+// 处理还原魔方
+function handleResetCube() {
+  if (state.value.cubeInstance) {
+    state.value.cubeInstance.reset()
+  }
+  // 重新启用拖拽控制
+  if (state.value.controls) {
+    state.value.controls.enable()
+  }
 }
+
+// ===== 工具函数 =====
+
+// 验证尺寸值
+function isValidSize(size) {
+  return typeof size === 'number' && !isNaN(size) && size > 0
+}
+
+// 验证半径值
+function isValidRadius(radius) {
+  return typeof radius === 'number' && !isNaN(radius) && radius >= 0
+}
+
+// 检查World是否准备好
+function isWorldReady(worldMethods = null) {
+  const methods = worldMethods || gameStore.getWorldMethods()
+  return methods?.scene && methods?.camera
+}
+
+// ===== 生命周期 =====
 
 onMounted(() => {
   // 设置 World 引用到 store
@@ -168,9 +270,24 @@ onMounted(() => {
   
   // 等待 World 组件初始化完成后自动初始化魔方
   setTimeout(() => {
-    initCube()
-    startAnimation()
-  },0)
+    if (initCube()) {
+      triggerThemeSwitchAnimation()
+    }
+  }, 400)
+})
+
+onUnmounted(() => {
+  // 清理资源
+  if (state.value.controls) {
+    state.value.controls.disable()
+  }
+  
+  if (state.value.animationManager) {
+    state.value.animationManager = null
+  }
+  
+  state.value.cubeInstance = null
+  state.value.isInitialized = false
 })
 </script>
 
@@ -226,62 +343,5 @@ onMounted(() => {
   position: relative;
   background: transparent;
   z-index: 10; /* 确保魔方在blob之上 */
-}
-
-/* 贴片可见性控制按钮 */
-.edge-controls {
-  position: fixed;
-  top: 20px;
-  right: 20px;
-  z-index: 1000;
-}
-
-.edge-btn {
-  padding: 12px 20px;
-  border: none;
-  border-radius: 8px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  cursor: pointer;
-  font-size: 14px;
-  font-weight: 600;
-  transition: all 0.3s ease;
-  backdrop-filter: blur(10px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-  min-width: 120px;
-  position: relative;
-  overflow: hidden;
-}
-
-.edge-btn::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: -100%;
-  width: 100%;
-  height: 100%;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
-  transition: left 0.5s;
-}
-
-.edge-btn:hover::before {
-  left: 100%;
-}
-
-.edge-btn:hover {
-  background: linear-gradient(135deg, #5a67d8 0%, #6b46c1 100%);
-  transform: translateY(-2px);
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
-}
-
-.edge-btn.active {
-  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-  box-shadow: 0 6px 16px rgba(240, 147, 251, 0.4);
-}
-
-.edge-btn.active:hover {
-  background: linear-gradient(135deg, #e91e63 0%, #c2185b 100%);
-  transform: translateY(-2px);
-  box-shadow: 0 8px 20px rgba(233, 30, 99, 0.4);
 }
 </style> 

@@ -868,15 +868,60 @@ function continueToNextPhase() {
   position: fixed;  /* 固定定位，覆盖整个视口 */
   width: 100%;     /* 全宽 */
   height: 100%;    /* 全高 */
-  background: linear-gradient(180deg,
-      #00050a 0%,    /* 顶部深蓝色 */
-      #000a14 50%,   /* 中间稍亮的蓝色 */
-      #001020 100%   /* 底部更亮的蓝色 */
-    );  /* 深蓝色渐变背景，营造太空氛围 */
+  background: 
+    /* 卡通质感的深蓝色渐变背景 */
+    linear-gradient(135deg,
+      #0a0f2e 0%,      /* 顶部深蓝紫色 */
+      #1a1f4a 25%,     /* 上部中蓝色 */
+      #2a2f6a 50%,     /* 中间亮蓝色 */
+      #1a1f4a 75%,     /* 下部中蓝色 */
+      #0a0f2e 100%     /* 底部深蓝紫色 */
+    ),
+    /* 卡通风格的装饰性图案 */
+    radial-gradient(circle at 20% 30%, rgba(100, 150, 255, 0.1) 0%, transparent 50%),
+    radial-gradient(circle at 80% 70%, rgba(150, 200, 255, 0.08) 0%, transparent 50%),
+    radial-gradient(circle at 40% 80%, rgba(80, 120, 200, 0.06) 0%, transparent 50%),
+    radial-gradient(circle at 90% 20%, rgba(120, 180, 255, 0.07) 0%, transparent 50%);
   overflow: hidden;  /* 隐藏溢出内容 */
+  position: relative; /* 为伪元素定位 */
 }
 
-/* 背景光晕效果 - 增强整体氛围 */
+/* 添加卡通质感的装饰性元素 */
+.particle-container::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: 
+    /* 卡通风格的网格纹理 */
+    linear-gradient(90deg, rgba(100, 150, 255, 0.03) 1px, transparent 1px),
+    linear-gradient(0deg, rgba(100, 150, 255, 0.03) 1px, transparent 1px);
+  background-size: 50px 50px;
+  animation: gridMove 20s linear infinite;
+  pointer-events: none;
+}
+
+.particle-container::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: 
+    /* 卡通风格的浮动光点 */
+    radial-gradient(2px 2px at 10% 20%, rgba(150, 200, 255, 0.8) 50%, transparent 50%),
+    radial-gradient(2px 2px at 30% 60%, rgba(100, 150, 255, 0.6) 50%, transparent 50%),
+    radial-gradient(3px 3px at 70% 40%, rgba(200, 220, 255, 0.7) 50%, transparent 50%),
+    radial-gradient(2px 2px at 90% 80%, rgba(120, 180, 255, 0.5) 50%, transparent 50%),
+    radial-gradient(2px 2px at 50% 10%, rgba(80, 120, 200, 0.6) 50%, transparent 50%);
+  animation: floatLights 15s ease-in-out infinite;
+  pointer-events: none;
+}
+
+/* 背景光晕效果 - 增强卡通质感氛围 */
 .glow {
   position: fixed;  /* 固定定位 */
   top: 0;
@@ -884,13 +929,20 @@ function continueToNextPhase() {
   width: 100%;
   height: 100%;
   pointer-events: none;  /* 不响应鼠标事件 */
-  background: radial-gradient(circle at 50% 50%,
-      rgba(0, 100, 180, 0.02) 0%,    /* 中心蓝色光晕 */
-      rgba(30, 0, 100, 0.03) 50%,    /* 中间紫色光晕 */
-      transparent 75%                 /* 边缘透明 */
-    );  /* 径向渐变创建光晕效果 */
+  background: 
+    /* 主光晕效果 */
+    radial-gradient(circle at 50% 50%,
+      rgba(100, 150, 255, 0.08) 0%,    /* 中心亮蓝色光晕 */
+      rgba(80, 120, 200, 0.06) 30%,    /* 中间中蓝色光晕 */
+      rgba(60, 90, 150, 0.04) 60%,     /* 外圈深蓝色光晕 */
+      transparent 80%                    /* 边缘透明 */
+    ),
+    /* 卡通风格的额外光效 */
+    radial-gradient(ellipse at 30% 20%, rgba(150, 200, 255, 0.05) 0%, transparent 50%),
+    radial-gradient(ellipse at 70% 80%, rgba(120, 180, 255, 0.04) 0%, transparent 50%);
   mix-blend-mode: screen;  /* 屏幕混合模式，增强光效 */
-  opacity: 0.5;  /* 整体透明度 */
+  opacity: 0.7;  /* 增强透明度 */
+  animation: glowPulse 8s ease-in-out infinite; /* 添加呼吸效果 */
 }
 
 /* 动画控制按钮样式 */
@@ -986,6 +1038,46 @@ function continueToNextPhase() {
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+/* 卡通质感背景动画 */
+@keyframes gridMove {
+  0% {
+    transform: translate(0, 0);
+  }
+  100% {
+    transform: translate(50px, 50px);
+  }
+}
+
+@keyframes floatLights {
+  0%, 100% {
+    opacity: 0.6;
+    transform: translateY(0px) scale(1);
+  }
+  25% {
+    opacity: 0.8;
+    transform: translateY(-10px) scale(1.1);
+  }
+  50% {
+    opacity: 1;
+    transform: translateY(-5px) scale(1.05);
+  }
+  75% {
+    opacity: 0.7;
+    transform: translateY(-15px) scale(0.95);
+  }
+}
+
+@keyframes glowPulse {
+  0%, 100% {
+    opacity: 0.7;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.9;
+    transform: scale(1.05);
   }
 }
 </style> 

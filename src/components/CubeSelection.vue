@@ -88,6 +88,11 @@ const cubeTypes = ref([
     id: 'cube3',
     name: '3阶魔方',
     description: '经典魔方，挑战你的空间思维'
+  },
+  {
+    id: 'cube4',
+    name: '4阶魔方',
+    description: '高阶挑战，考验你的耐心和技巧'
   }
 ])
 
@@ -125,6 +130,9 @@ function confirmSelection() {
   // 直接设置魔方类型和大小
   cubeStore.setCubeType(selectedType.value)
   
+  // 设置主题 
+  cubeStore.setTheme(selectedStyle.value)
+  
   // 验证设置是否成功
   const currentConfig = cubeStore.getCubeConfig()
   
@@ -134,7 +142,7 @@ function confirmSelection() {
     typeInfo: selectedTypeInfo,
     styleInfo: selectedStyleInfo,
     config: {
-      cubeOrder: selectedType.value === 'cube2' ? 2 : 3,
+      cubeOrder: selectedType.value === 'cube2' ? 2 : selectedType.value === 'cube3' ? 3 : 4,
       isClassicStyle: selectedStyle.value === 'classic',
       isCoolBlueStyle: selectedStyle.value === 'coolBlue'
     }
@@ -225,28 +233,32 @@ function confirmSelection() {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
 }
 
-.cube-type-grid,
+.cube-type-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+}
+
 .cube-style-grid {
   display: flex;
   flex-direction: column;
   gap: 1rem;
 }
 
-.cube-type-card,
-.cube-style-card {
+.cube-type-card {
   background: rgba(255, 255, 255, 0.15);
   backdrop-filter: blur(10px);
   border-radius: 16px;
-  /* padding: 1.5rem; */
+  padding: 1.2rem;
   cursor: pointer;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   border: 2px solid rgba(255, 255, 255, 0.2);
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
   position: relative;
   overflow: hidden;
-  /* 调试样式 */
   pointer-events: auto;
   z-index: 10;
+  text-align: center;
 }
 
 .cube-type-card::before,
@@ -259,6 +271,21 @@ function confirmSelection() {
   height: 100%;
   background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
   transition: left 0.5s;
+}
+
+.cube-style-card {
+  background: rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(10px);
+  border-radius: 16px;
+  padding: 1.5rem;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+  position: relative;
+  overflow: hidden;
+  pointer-events: auto;
+  z-index: 10;
 }
 
 .cube-type-card:hover::before,
@@ -287,14 +314,14 @@ function confirmSelection() {
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-bottom: 1rem;
-  height: 80px;
+  margin-bottom: 0.8rem;
+  height: 60px;
 }
 
 .cube-icon {
-  width: 60px;
-  height: 60px;
-  border-radius: 12px;
+  width: 50px;
+  height: 50px;
+  border-radius: 10px;
   position: relative;
   transform-style: preserve-3d;
   animation: float 3s ease-in-out infinite;
@@ -326,6 +353,17 @@ function confirmSelection() {
 }
 
 .cube-cube3::after {
+  background: linear-gradient(45deg, #fd79a8, #e84393);
+  transform: translateX(8px) translateY(-8px);
+  opacity: 0.8;
+}
+
+.cube-cube4::before {
+  background: linear-gradient(45deg, #a55eea, #8854d0);
+  box-shadow: 0 4px 15px rgba(165, 94, 234, 0.3);
+}
+
+.cube-cube4::after {
   background: linear-gradient(45deg, #fd79a8, #e84393);
   transform: translateX(8px) translateY(-8px);
   opacity: 0.8;
@@ -393,17 +431,17 @@ function confirmSelection() {
 }
 
 .card-title {
-  font-size: 1.25rem;
+  font-size: 1.1rem;
   font-weight: 600;
   color: rgba(255, 255, 255, 0.9);
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.4rem;
   text-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 
 .card-description {
-  font-size: 0.875rem;
+  font-size: 0.8rem;
   color: rgba(255, 255, 255, 0.7);
-  line-height: 1.5;
+  line-height: 1.4;
   margin: 0;
   text-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
 }
@@ -530,9 +568,17 @@ function confirmSelection() {
     margin: 0;
   }
 
-  .cube-type-card,
-  .cube-style-card {
+  .cube-type-grid {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.8rem;
+  }
+
+  .cube-type-card {
     padding: 1rem;
+  }
+
+  .cube-style-card {
+    padding: 1.5rem;
   }
 
   .confirm-btn {
@@ -552,6 +598,34 @@ function confirmSelection() {
 
   .section-title {
     font-size: 1.25rem;
+  }
+
+  .cube-type-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.6rem;
+  }
+
+  .cube-type-card {
+    padding: 0.8rem;
+  }
+
+  .card-icon,
+  .style-preview {
+    height: 50px;
+    margin-bottom: 0.6rem;
+  }
+
+  .cube-icon {
+    width: 40px;
+    height: 40px;
+  }
+
+  .card-title {
+    font-size: 1rem;
+  }
+
+  .card-description {
+    font-size: 0.75rem;
   }
 }
 </style>

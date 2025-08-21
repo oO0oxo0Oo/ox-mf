@@ -47,7 +47,7 @@ function handleAnimationComplete() {
 function handleNavigateToCube(selection) {
   cubeConfig.value = {
     type: selection.type,
-    style: selection.style
+    theme: selection.style  // 将 style 映射到 theme
   }  
   // 切换到魔方页面
   showBegin.value = false

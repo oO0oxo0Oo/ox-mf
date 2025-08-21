@@ -412,4 +412,6 @@ export class CubeInterface {
   generateModel(customPieceSize = null) {
     throw new Error('generateModel method must be implemented by subclass');
   }
+
+  
 }
