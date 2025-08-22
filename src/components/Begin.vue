@@ -895,7 +895,6 @@ function continueToNextPhase() {
   width: 100%;
   height: 100%;
   background: 
-    /* 卡通风格的网格纹理 */
     linear-gradient(90deg, rgba(100, 150, 255, 0.03) 1px, transparent 1px),
     linear-gradient(0deg, rgba(100, 150, 255, 0.03) 1px, transparent 1px);
   background-size: 50px 50px;
@@ -911,7 +910,6 @@ function continueToNextPhase() {
   width: 100%;
   height: 100%;
   background: 
-    /* 卡通风格的浮动光点 */
     radial-gradient(2px 2px at 10% 20%, rgba(150, 200, 255, 0.8) 50%, transparent 50%),
     radial-gradient(2px 2px at 30% 60%, rgba(100, 150, 255, 0.6) 50%, transparent 50%),
     radial-gradient(3px 3px at 70% 40%, rgba(200, 220, 255, 0.7) 50%, transparent 50%),
@@ -930,17 +928,15 @@ function continueToNextPhase() {
   height: 100%;
   pointer-events: none;  /* 不响应鼠标事件 */
   background: 
-    /* 主光晕效果 */
     radial-gradient(circle at 50% 50%,
-      rgba(100, 150, 255, 0.08) 0%,    /* 中心亮蓝色光晕 */
-      rgba(80, 120, 200, 0.06) 30%,    /* 中间中蓝色光晕 */
-      rgba(60, 90, 150, 0.04) 60%,     /* 外圈深蓝色光晕 */
-      transparent 80%                    /* 边缘透明 */
+      rgba(100, 150, 255, 0.08) 0%,   
+      rgba(80, 120, 200, 0.06) 30%, 
+      rgba(60, 90, 150, 0.04) 60%,     
+      transparent 80%                    
     ),
-    /* 卡通风格的额外光效 */
     radial-gradient(ellipse at 30% 20%, rgba(150, 200, 255, 0.05) 0%, transparent 50%),
     radial-gradient(ellipse at 70% 80%, rgba(120, 180, 255, 0.04) 0%, transparent 50%);
-  mix-blend-mode: screen;  /* 屏幕混合模式，增强光效 */
+  mix-blend-mode: screen;  
   opacity: 0.7;  /* 增强透明度 */
   animation: glowPulse 8s ease-in-out infinite; /* 添加呼吸效果 */
 }

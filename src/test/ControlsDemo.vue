@@ -61,14 +61,13 @@
 import { ref, reactive, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import World from '../components/World.vue'
 import { useControls } from '../composable/useControls'
-import { useGameStore, useCubeStore } from '../stores'
+import { useCubeStore } from '../stores'
 
 // 组件引用
 const worldRef = ref(null)
 const worldComponent = ref(null)
 
 // Store 实例
-const gameStore = useGameStore()
 const cubeStore = useCubeStore()
 
 // 响应式状态
@@ -95,20 +94,19 @@ let controlsInstance = null
 
 // 控制功能
 function enableControls() {
-    const worldMethods = gameStore.getWorldMethods()
+    if (!worldComponent.value) return
 
-    cubeStore.initCube(worldMethods.scene)
+    cubeStore.initCube(worldComponent.value.scene)
     cubeInitialized.value = true
 
-
     // 获取 camera
-    const camera = worldMethods?.camera
+    const camera = worldComponent.value.camera
 
     // 从 store 获取魔方实例
     const cubeInstance = cubeStore.getCubeInstance()
 
     // 初始化控制
-    controlsInstance = useControls(worldRef, cubeInstance, camera, {
+    controlsInstance = useControls(worldRef, cubeInstance, camera, worldComponent.value, {
       onScrambleComplete: () => {
         isScrambling.value = false
       }
@@ -145,9 +143,7 @@ watch(() => cubeStore.isInitialized, (initialized) => {
 
 // 生命周期
 onMounted(() => {
-  gameStore.setWorldRef(worldComponent.value)
   enableControls()
-
 })
 
 </script>

@@ -3,7 +3,7 @@ import { ref, reactive, computed, readonly } from "vue";
 import { Easing } from "./Easing.js";
 import { useTween } from "./useTween.js";
 import { useDraggable } from "./useDraggable.js";
-import { useGameStore, useCubeStore } from "../stores";
+import { useCubeStore } from "../stores";
 
 // 状态常量
 const STILL = 0;
@@ -11,9 +11,8 @@ const PREPARING = 1;
 const ROTATING = 2;
 const ANIMATING = 3;
 
-export function useControls(targetRef, cubeInstance, camera, options = {}) {
+export function useControls(targetRef, cubeInstance, camera, world, options = {}) {
 	// 获取 store 实例
-	const gameStore = useGameStore();
 	const cubeStore = useCubeStore();
 
 	// 响应式状态
@@ -88,15 +87,14 @@ export function useControls(targetRef, cubeInstance, camera, options = {}) {
 
 	// 初始化
 	function init() {
-		const worldMethods = gameStore.getWorldMethods();
-		if (!worldMethods || !worldMethods.scene) {
+		if (!world || !world.scene) {
 			return;
 		}
 
 		// 添加到场景（对应原始代码中的 this.game.world.scene.add）
-		worldMethods.scene.add(helper);
-		worldMethods.scene.add(edges);
-		// worldMethods.scene.add(axesHelper);
+		world.scene.add(helper);
+		world.scene.add(edges);
+		// world.scene.add(axesHelper);
 
 		// 设置初始位置（对应原始代码中的 this.helper.rotation.set(0, Math.PI / 4, 0)）
 		helper.rotation.set(0, Math.PI / 4, 0);
@@ -233,8 +231,7 @@ export function useControls(targetRef, cubeInstance, camera, options = {}) {
 				rotationState.layer = layer;
 			} else {
 				// 整体旋转时，确定旋转轴（对应原始代码中的轴选择逻辑）
-				const worldMethods = gameStore.getWorldMethods();
-				const containerWidth = worldMethods?.width || 800;
+				const containerWidth = 800; // 默认宽度
 
 				const axis =
 					dragState.direction !== "x"
@@ -458,9 +455,8 @@ export function useControls(targetRef, cubeInstance, camera, options = {}) {
 	function detach(child, parent) {
 		child.applyMatrix4(parent.matrixWorld);
 		parent.remove(child);
-		const worldMethods = gameStore.getWorldMethods();
-		if (worldMethods?.scene) {
-			worldMethods.scene.add(child);
+		if (world?.scene) {
+			world.scene.add(child);
 		}
 	}
 
@@ -469,9 +465,8 @@ export function useControls(targetRef, cubeInstance, camera, options = {}) {
 		const inverseMatrix = new THREE.Matrix4().copy(parent.matrixWorld).invert();
 		
 		child.applyMatrix4(inverseMatrix);
-		const worldMethods = gameStore.getWorldMethods();
-		if (worldMethods?.scene) {
-			worldMethods.scene.remove(child);
+		if (world?.scene) {
+			world.scene.remove(child);
 		}
 		parent.add(child);
 	}
@@ -557,6 +552,19 @@ export function useControls(targetRef, cubeInstance, camera, options = {}) {
 		return cubeInstance ? cubeInstance.pieces : [];
 	}
 
+	// 重置魔方整体旋转到初始状态
+	function resetWorldRotation() {
+		if (cubeInstance && cubeInstance.object) {
+			// 重置魔方对象的旋转
+			cubeInstance.object.rotation.set(0, 0, 0);
+			// 重置 edges 对象的旋转
+			edges.rotation.set(0, 0, 0);
+			// 更新矩阵
+			cubeInstance.object.updateMatrixWorld();
+			edges.updateMatrixWorld();
+		}
+	}
+
 	// 清理函数
 	function cleanup() {
 		if (rotationTween) {
@@ -566,10 +574,9 @@ export function useControls(targetRef, cubeInstance, camera, options = {}) {
 		// 重置打乱状态
 		isScrambling.value = false;
 
-		const worldMethods = gameStore.getWorldMethods();
-		if (worldMethods?.scene) {
-			worldMethods.scene.remove(helper);
-			worldMethods.scene.remove(edges);
+		if (world?.scene) {
+			world.scene.remove(helper);
+			world.scene.remove(edges);
 		}
 	}
 
@@ -601,5 +608,8 @@ export function useControls(targetRef, cubeInstance, camera, options = {}) {
 		dragState: readonly(dragState),
 		rotationState: readonly(rotationState),
 		momentum: readonly(momentum),
+
+		// 添加重置方法
+		resetWorldRotation,
 	};
 }

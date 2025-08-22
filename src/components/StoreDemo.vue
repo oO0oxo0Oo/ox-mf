@@ -8,32 +8,24 @@
       <div class="status-grid">
         <div class="status-item">
           <span>游戏状态:</span>
-          <span :class="gameStore.isPlaying ? 'active' : 'inactive'">
-            {{ gameStore.isPlaying ? '进行中' : '未开始' }}
-          </span>
+          <span class="inactive">已简化</span>
         </div>
         <div class="status-item">
           <span>分数:</span>
-          <span>{{ gameStore.score }}</span>
+          <span>0</span>
         </div>
         <div class="status-item">
           <span>等级:</span>
-          <span>{{ gameStore.level }}</span>
+          <span>1</span>
         </div>
       </div>
       
       <div class="actions">
-        <button @click="gameStore.startGame()" :disabled="gameStore.isPlaying">
-          开始游戏
-        </button>
-        <button @click="gameStore.pauseGame()" :disabled="!gameStore.isPlaying">
-          暂停
-        </button>
-        <button @click="gameStore.resetGame()" :disabled="!gameStore.isPlaying">
-          重置
-        </button>
         <button @click="addPoints">+100分</button>
-        <button @click="gameStore.nextLevel()">升级</button>
+        <button disabled>开始游戏</button>
+        <button disabled>暂停</button>
+        <button disabled>重置</button>
+        <button disabled>升级</button>
       </div>
     </div>
     
@@ -41,22 +33,19 @@
     <div class="section">
       <h3>架构说明</h3>
       <div class="architecture-info">
-        <p><strong>Game Store:</strong> 管理游戏的核心状态，包括分数、等级、游戏状态等</p>
+        <p><strong>架构已简化:</strong> 移除了不必要的 game store，直接使用 World 组件</p>
         <p><strong>World 组件:</strong> 提供Three.js场景渲染功能</p>
-        <p><strong>组合使用:</strong> Store通过ref引用World组件来访问Three.js对象和方法</p>
+        <p><strong>直接引用:</strong> 组件直接引用 World 组件，无需中间层</p>
       </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { useGameStore } from '../stores'
-
-const gameStore = useGameStore()
-
 // 添加分数的方法
 const addPoints = () => {
-  gameStore.addScore(100)
+  // 游戏逻辑已简化，不再需要 game store
+  console.log('添加分数功能已简化')
 }
 </script>
 

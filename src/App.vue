@@ -32,9 +32,7 @@ const cubeConfig = ref({
 
 // 响应式背景样式计算
 const appStyle = computed(() => ({
-  background: showBegin.value 
-    ? '#0a0a0a' 
-    : 'linear-gradient(135deg, #87CEEB 0%, #00BFFF 50%, #1E90FF 100%)',
+  background: '#FFB1A4',
   transition: 'background 1.2s ease-in-out'
 }))
 
@@ -64,7 +62,6 @@ function handleNavigateToCube(selection) {
   overflow: hidden;
 }
 
-/* WebGL友好的过渡动画 */
 .fade-enter-active {
   transition: opacity 0.8s ease-out;
 }

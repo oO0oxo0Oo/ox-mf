@@ -23,6 +23,7 @@
     <RotationMenu 
       @toggle-dragging="handleToggleDragging"
       @reset-cube="handleResetCube"
+      @reset-world-rotation="handleResetWorldRotation"
     />
   </div>
 </template>
@@ -32,7 +33,7 @@ import { ref, onMounted, watch, onUnmounted, computed } from 'vue'
 import World from './World.vue'
 import RotationMenu from "./RotationMenu.vue"
 import { useControls } from '../composable/useControls.js'
-import { useGameStore, useCubeStore } from '../stores/index.js'
+import { useCubeStore } from '../stores/index.js'
 import { useAnimationStore } from '../stores/animation.js'
 import { useTimeline } from '../composable/useTimeline.js'
 import { TimelineAnimationManager } from '../animations/timelineAnimations.js'
@@ -54,7 +55,6 @@ const worldRef = ref(null)
 const worldComponent = ref(null)
 
 // ===== Store 实例 =====
-const gameStore = useGameStore()
 const cubeStore = useCubeStore()
 const animationStore = useAnimationStore()
 
@@ -125,10 +125,8 @@ watch(() => props.cubeConfig.theme, (newTheme) => {
 
 // 现代方式：初始化动画系统
 function initAnimationSystem() {
-  const worldMethods = gameStore.getWorldMethods()
-  
-  if (!isWorldReady(worldMethods)) {
-    console.warn('World场景或相机未准备好，无法初始化动画系统')
+  if (!worldComponent.value) {
+    console.warn('World组件未准备好，无法初始化动画系统')
     return false
   }
 
@@ -138,8 +136,8 @@ function initAnimationSystem() {
   // 创建动画管理器实例
   state.value.animationManager = new TimelineAnimationManager(
     timeline, 
-    worldMethods.scene, 
-    worldMethods.camera, 
+    worldComponent.value.scene, 
+    worldComponent.value.camera, 
     null, // 没有粒子系统
     8,    // baseRadius
     0,    // initialRotationX
@@ -157,7 +155,7 @@ function initAnimationSystem() {
 
 // 现代方式：初始化魔方
 function initCube() {
-  if (!isWorldReady()) {
+  if (!worldComponent.value) {
     console.warn('World 组件未准备好')
     return false
   }
@@ -172,8 +170,7 @@ function initCube() {
   }
   
   // 使用 store 初始化魔方
-  const worldMethods = gameStore.getWorldMethods()
-  cubeStore.initCube(worldMethods.scene)
+  cubeStore.initCube(worldComponent.value.scene)
   
   // 获取魔方实例
   state.value.cubeInstance = cubeStore.getCubeInstance()
@@ -197,11 +194,10 @@ function initCube() {
 }
 
 // 现代方式：初始化控制模块
-async function initControls() {
-  if (!state.value.cubeInstance || !worldRef.value) return false
+function initControls() {
+  if (!state.value.cubeInstance || !worldRef.value || !worldComponent.value) return false
   
-  const worldMethods = gameStore.getWorldMethods()
-  state.value.controls = useControls(worldRef, state.value.cubeInstance, worldMethods.camera)
+  state.value.controls = useControls(worldRef, state.value.cubeInstance, worldComponent.value.camera, worldComponent.value)
   state.value.controls.init()
   state.value.controls.enable()
   return true
@@ -244,6 +240,13 @@ function handleResetCube() {
   }
 }
 
+// 处理重置整体旋转
+function handleResetWorldRotation() {
+	if (state.value.controls) {
+		state.value.controls.resetWorldRotation();
+	}
+}
+
 // ===== 工具函数 =====
 
 // 验证尺寸值
@@ -257,17 +260,13 @@ function isValidRadius(radius) {
 }
 
 // 检查World是否准备好
-function isWorldReady(worldMethods = null) {
-  const methods = worldMethods || gameStore.getWorldMethods()
-  return methods?.scene && methods?.camera
+function isWorldReady() {
+  return worldComponent.value?.scene && worldComponent.value?.camera
 }
 
 // ===== 生命周期 =====
 
 onMounted(() => {
-  // 设置 World 引用到 store
-  gameStore.setWorldRef(worldComponent.value)
-  
   // 等待 World 组件初始化完成后自动初始化魔方
   setTimeout(() => {
     if (initCube()) {
@@ -302,6 +301,7 @@ onUnmounted(() => {
   background: #FFB1A4;
   position: relative;
   overflow: hidden;
+  transition: background 20s ease;
 }
 
 /* Blob 背景容器 */
@@ -343,5 +343,16 @@ onUnmounted(() => {
   position: relative;
   background: transparent;
   z-index: 10; /* 确保魔方在blob之上 */
+}
+
+.reset-world-btn {
+	background: linear-gradient(145deg, #667eea 0%, #764ba2 100%);
+	border-color: rgba(102, 126, 234, 0.3);
+}
+
+.reset-world-btn:hover {
+	background: linear-gradient(145deg, #5a6fd8 0%, #6a4190 100%);
+	transform: translateY(-2px);
+	box-shadow: 0 4px 16px rgba(102, 126, 234, 0.4);
 }
 </style> 

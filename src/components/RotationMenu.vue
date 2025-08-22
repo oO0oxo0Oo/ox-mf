@@ -1,19 +1,17 @@
 <script setup>
 import { useRotationQueueStore } from "../stores/rotationQueue";
 import { useCubeStore } from "../stores/cube";
-import { useGameStore } from "../stores/game";
 import { computed, ref, watch } from "vue";
 import { getThemeColors } from "../config/themes.js";
 
 const rotationQueueStore = useRotationQueueStore();
 const cubeStore = useCubeStore();
-const gameStore = useGameStore();
 
 // 控制状态
 const isDraggingEnabled = ref(true);
 
 // 定义事件
-const emit = defineEmits(['toggle-dragging', 'reset-cube']);
+const emit = defineEmits(['toggle-dragging', 'reset-cube', 'reset-world-rotation']);
 
 const scramble = () => {
 	cubeStore.scrambleCube();
@@ -31,6 +29,11 @@ const toggleDragging = () => {
 // 还原魔方
 const resetCube = () => {
 	emit('reset-cube');
+}
+
+// 重置整体旋转
+const resetWorldRotation = () => {
+	emit('reset-world-rotation');
 }
 
 
@@ -152,6 +155,15 @@ watch(() => cubeStore.config.theme, (newTheme) => {
 			>
 				<span class="btn-icon">↩️</span>
 				<span class="btn-text">还原</span>
+			</button>
+			<!-- 新增：重置整体旋转按钮 -->
+			<button 
+				class="control-btn reset-world-btn"
+				@click="resetWorldRotation"
+				title="重置视角"
+			>
+				<span class="btn-icon">🔄</span>
+				<span class="btn-text">重置视角</span>
 			</button>
 		</div>
 
@@ -543,6 +555,17 @@ watch(() => cubeStore.config.theme, (newTheme) => {
 
 .btn-text {
 	font-size: 0.85rem;
+}
+
+.reset-world-btn {
+	background: linear-gradient(145deg, #667eea 0%, #764ba2 100%);
+	border-color: rgba(102, 126, 234, 0.3);
+}
+
+.reset-world-btn:hover {
+	background: linear-gradient(145deg, #5a6fd8 0%, #6a4190 100%);
+	transform: translateY(-2px);
+	box-shadow: 0 4px 16px rgba(102, 126, 234, 0.4);
 }
 
 /* 动画 */
