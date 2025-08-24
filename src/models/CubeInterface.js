@@ -1,7 +1,6 @@
 import { RoundedBoxGeometry, RoundedPlaneGeometry } from "../geometry/Geometry";
 import * as THREE from "three";
 import { useScramble } from "../composable/useScramble.js";
-import { useRotationQueueStore } from "../stores/rotationQueue.js";
 
 // 通用魔方接口 - 包含所有魔方类型都应该实现的方法
 export class CubeInterface {
@@ -203,11 +202,10 @@ export class CubeInterface {
   // ========== 通用打乱相关方法 ==========
   
   // 魔方打乱动画
-  scrambleCube() {
+  scrambleCube(rotationQueue) {
     const queue = useScramble();
-    const rotationQueueStore = useRotationQueueStore();
     this.isScrambling = true;
-    rotationQueueStore.rotationQueue(queue);
+    rotationQueue.rotationQueue(queue);
   }
 
   // 获取打乱状态
@@ -216,13 +214,12 @@ export class CubeInterface {
   }
 
   // 停止打乱
-  stopScramble() {
+  stopScramble(rotationQueue) {
     this.isScrambling = false;
     if (this.rotationTween) {
       this.rotationTween.stop();
     }
-    const rotationQueueStore = useRotationQueueStore();
-    rotationQueueStore.clearRotationQueue();
+    rotationQueue.clearRotationQueue();
   }
 
   // ========== 通用几何更新方法 ==========

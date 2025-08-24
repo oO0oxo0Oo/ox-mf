@@ -5,12 +5,10 @@
         v-if="showBegin" 
         @animation-complete="handleAnimationComplete"
         @navigate-to-cube="handleNavigateToCube"
-        key="begin"
       />
       <Cube
         v-else
         :cube-config="cubeConfig"
-        key="cube-demo"
       />
     </transition>
   </div>

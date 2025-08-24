@@ -3,12 +3,14 @@
     <div class="selection-container">
       <h2 class="selection-title">选择你的魔方</h2>
       
-      <!-- 主要选择区域 - 左右布局 -->
+      <!-- 主要选择区域 - 响应式布局 -->
       <div class="main-selection">
         <!-- 魔方类型选择 -->
-        <div class="selection-section left-section">
+        <div class="selection-section">
           <h3 class="section-title">魔方类型</h3>
-          <div class="cube-type-grid">
+          
+          <!-- 桌面端：网格布局 -->
+          <div class="cube-type-grid desktop-only">
             <div 
               v-for="type in cubeTypes" 
               :key="type.id"
@@ -25,25 +27,89 @@
               </div>
             </div>
           </div>
+          
+          <!-- 移动端：下拉菜单 -->
+          <div class="mobile-only">
+            <div class="dropdown-container">
+              <button 
+                class="dropdown-trigger"
+                @click="toggleTypeDropdown"
+                :class="{ 'active': typeDropdownOpen }"
+              >
+                <span class="dropdown-text">
+                  {{ selectedType ? getTypeName(selectedType) : '类型' }}
+                </span>
+                <span class="dropdown-arrow">▼</span>
+              </button>
+              <div class="dropdown-menu" v-show="typeDropdownOpen">
+                                 <div 
+                   v-for="type in cubeTypes" 
+                   :key="type.id"
+                   class="dropdown-item"
+                   :class="{ 'selected': selectedType === type.id }"
+                   @click="selectTypeFromDropdown(type.id)"
+                 >
+                   <span class="dropdown-item-text">{{ type.name }}</span>
+                 </div>
+              </div>
+            </div>
+          </div>
         </div>
 
-        <!-- 魔方风格选择 -->
-        <div class="selection-section right-section">
-          <h3 class="section-title">魔方风格</h3>
-          <div class="cube-style-grid">
+        <!-- 魔方主题选择 -->
+        <div class="selection-section">
+          <h3 class="section-title">魔方主题</h3>
+          
+          <!-- 桌面端：网格布局 -->
+          <div class="cube-theme-grid desktop-only">
             <div 
-              v-for="style in cubeStyles" 
-              :key="style.id"
-              class="cube-style-card"
-              :class="{ 'selected': selectedStyle === style.id }"
-              @click="selectStyle(style.id)"
+              v-for="theme in availableThemes" 
+              :key="theme.key"
+              class="cube-theme-card"
+              :class="{ 'selected': selectedTheme === theme.key }"
+              @click="selectTheme(theme.key)"
             >
-              <div class="style-preview">
-                <div :class="`style-icon style-${style.id}`"></div>
+              <div class="theme-preview">
+                <div class="theme-colors">
+                  <div 
+                    v-for="(color, face) in theme.colors" 
+                    :key="face"
+                    class="color-swatch"
+                    :style="{ backgroundColor: `#${color.toString(16).padStart(6, '0')}` }"
+                    :title="getFaceName(face)"
+                  ></div>
+                </div>
               </div>
               <div class="card-content">
-                <h4 class="card-title">{{ style.name }}</h4>
-                <p class="card-description">{{ style.description }}</p>
+                <h4 class="card-title">{{ theme.name }}</h4>
+                <p class="card-description">{{ getThemeDescription(theme.key) }}</p>
+              </div>
+            </div>
+          </div>
+          
+          <!-- 移动端：下拉菜单 -->
+          <div class="mobile-only">
+            <div class="dropdown-container">
+              <button 
+                class="dropdown-trigger"
+                @click="toggleThemeDropdown"
+                :class="{ 'active': themeDropdownOpen }"
+              >
+                <span class="dropdown-text">
+                  {{ selectedTheme ? getThemeName(selectedTheme) : '主题' }}
+                </span>
+                <span class="dropdown-arrow">▼</span>
+              </button>
+              <div class="dropdown-menu" v-show="themeDropdownOpen">
+                                 <div 
+                   v-for="theme in availableThemes" 
+                   :key="theme.key"
+                   class="dropdown-item"
+                   :class="{ 'selected': selectedTheme === theme.key }"
+                   @click="selectThemeFromDropdown(theme.key)"
+                 >
+                   <span class="dropdown-item-text">{{ theme.name }}</span>
+                 </div>
               </div>
             </div>
           </div>
@@ -55,9 +121,9 @@
         <button 
           @click="confirmSelection" 
           class="confirm-btn"
-          :disabled="!selectedType || !selectedStyle"
+          :disabled="!selectedType || !selectedTheme"
         >
-          {{ (!selectedType || !selectedStyle) ? '请完成选择' : '开始游戏' }}
+          {{ (!selectedType || !selectedTheme) ? '请完成选择' : '开始游戏' }}
         </button>
       </div>
     </div>
@@ -65,8 +131,9 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { useCubeStore } from '../stores/cube'
+import { getAvailableThemes } from '../config/themes'
 
 // 定义组件事件
 const emit = defineEmits(['selection-confirmed'])
@@ -75,7 +142,12 @@ const cubeStore = useCubeStore()
 
 // 响应式数据
 const selectedType = ref(null)
-const selectedStyle = ref(null) // 不设置默认值，强制用户选择
+const selectedTheme = ref(null)
+const typeDropdownOpen = ref(false)
+const themeDropdownOpen = ref(false)
+
+// 从主题文件获取所有可用主题
+const availableThemes = ref([])
 
 // 魔方类型配置
 const cubeTypes = ref([
@@ -96,55 +168,125 @@ const cubeTypes = ref([
   }
 ])
 
-// 魔方风格配置
-const cubeStyles = ref([
-  {
-    id: 'classic',
-    name: '经典风格',
-    description: '传统配色，经典体验'
-  },
-  {
-    id: 'coolBlue',
-    name: '炫酷蓝风格',
-    description: '科技感十足，蓝色主题'
-  }
-])
+// 初始化主题数据
+onMounted(() => {
+  availableThemes.value = getAvailableThemes()
+})
 
 // 选择魔方类型
 function selectType(typeId) {
   selectedType.value = typeId
 }
 
-// 选择魔方风格
-function selectStyle(styleId) {
-  selectedStyle.value = styleId
+// 从下拉菜单选择魔方类型
+function selectTypeFromDropdown(typeId) {
+  selectedType.value = typeId
+  typeDropdownOpen.value = false
 }
+
+// 选择魔方主题
+function selectTheme(themeKey) {
+  selectedTheme.value = themeKey
+}
+
+// 从下拉菜单选择魔方主题
+function selectThemeFromDropdown(themeKey) {
+  selectedTheme.value = themeKey
+  themeDropdownOpen.value = false
+}
+
+// 切换类型下拉菜单
+function toggleTypeDropdown() {
+  typeDropdownOpen.value = !typeDropdownOpen.value
+  if (themeDropdownOpen.value) {
+    themeDropdownOpen.value = false
+  }
+}
+
+// 切换主题下拉菜单
+function toggleThemeDropdown() {
+  themeDropdownOpen.value = !themeDropdownOpen.value
+  if (typeDropdownOpen.value) {
+    typeDropdownOpen.value = false
+  }
+}
+
+// 获取类型名称
+function getTypeName(typeId) {
+  const type = cubeTypes.value.find(t => t.id === typeId)
+  return type ? type.name : ''
+}
+
+// 获取主题名称
+function getThemeName(themeKey) {
+  const theme = availableThemes.value.find(t => t.key === themeKey)
+  return theme ? theme.name : ''
+}
+
+// 获取主题描述
+function getThemeDescription(themeKey) {
+  const descriptions = {
+    classic: '传统配色，经典体验',
+    coolBlue: '科技感十足，蓝色主题',
+    warmOrange: '温暖橙色，活力四射',
+    forest: '清新绿色，自然和谐'
+  }
+  return descriptions[themeKey] || '独特配色，个性体验'
+}
+
+// 获取面名称
+function getFaceName(face) {
+  const faceNames = {
+    U: '上',
+    D: '下',
+    F: '前',
+    B: '后',
+    L: '左',
+    R: '右'
+  }
+  return faceNames[face] || face
+}
+
+// 点击外部关闭下拉菜单
+function handleClickOutside(event) {
+  if (!event.target.closest('.dropdown-container')) {
+    typeDropdownOpen.value = false
+    themeDropdownOpen.value = false
+  }
+}
+
+// 监听点击事件
+onMounted(() => {
+  document.addEventListener('click', handleClickOutside)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('click', handleClickOutside)
+})
 
 // 确认选择
 function confirmSelection() {
-
   // 获取选择的详细信息
   const selectedTypeInfo = cubeTypes.value.find(type => type.id === selectedType.value)
-  const selectedStyleInfo = cubeStyles.value.find(style => style.id === selectedStyle.value)
+  const selectedThemeInfo = availableThemes.value.find(theme => theme.key === selectedTheme.value)
 
   // 直接设置魔方类型和大小
   cubeStore.setCubeType(selectedType.value)
   
   // 设置主题 
-  cubeStore.setTheme(selectedStyle.value)
+  cubeStore.setTheme(selectedTheme.value)
   
   // 验证设置是否成功
   const currentConfig = cubeStore.getCubeConfig()
   
   const selectionData = {
     type: selectedType.value,
-    style: selectedStyle.value,
+    theme: selectedTheme.value,
     typeInfo: selectedTypeInfo,
-    styleInfo: selectedStyleInfo,
+    themeInfo: selectedThemeInfo,
     config: {
       cubeOrder: selectedType.value === 'cube2' ? 2 : selectedType.value === 'cube3' ? 3 : 4,
-      isClassicStyle: selectedStyle.value === 'classic',
-      isCoolBlueStyle: selectedStyle.value === 'coolBlue'
+      theme: selectedTheme.value
     }
   }
   
@@ -160,7 +302,6 @@ function confirmSelection() {
   display: flex;
   align-items: center;
   justify-content: center;
-  /* padding: 2rem; */
   position: relative;
   overflow: hidden;
 }
@@ -202,14 +343,6 @@ function confirmSelection() {
   flex: 1;
 }
 
-.left-section {
-  margin-right: 1rem;
-}
-
-.right-section {
-  margin-left: 1rem;
-}
-
 .section-title {
   font-size: 1.5rem;
   font-weight: 600;
@@ -233,19 +366,29 @@ function confirmSelection() {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
 }
 
+/* 桌面端样式 */
+.desktop-only {
+  display: block;
+}
+
+.mobile-only {
+  display: none;
+}
+
 .cube-type-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 1rem;
 }
 
-.cube-style-grid {
-  display: flex;
-  flex-direction: column;
+.cube-theme-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
   gap: 1rem;
 }
 
-.cube-type-card {
+.cube-type-card,
+.cube-theme-card {
   background: rgba(255, 255, 255, 0.15);
   backdrop-filter: blur(10px);
   border-radius: 16px;
@@ -262,7 +405,7 @@ function confirmSelection() {
 }
 
 .cube-type-card::before,
-.cube-style-card::before {
+.cube-theme-card::before {
   content: '';
   position: absolute;
   top: 0;
@@ -273,28 +416,13 @@ function confirmSelection() {
   transition: left 0.5s;
 }
 
-.cube-style-card {
-  background: rgba(255, 255, 255, 0.15);
-  backdrop-filter: blur(10px);
-  border-radius: 16px;
-  padding: 1.5rem;
-  cursor: pointer;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  border: 2px solid rgba(255, 255, 255, 0.2);
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
-  position: relative;
-  overflow: hidden;
-  pointer-events: auto;
-  z-index: 10;
-}
-
 .cube-type-card:hover::before,
-.cube-style-card:hover::before {
+.cube-theme-card:hover::before {
   left: 100%;
 }
 
 .cube-type-card:hover,
-.cube-style-card:hover {
+.cube-theme-card:hover {
   transform: translateY(-4px);
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25);
   background: rgba(255, 255, 255, 0.3) !important;
@@ -302,7 +430,7 @@ function confirmSelection() {
 }
 
 .cube-type-card.selected,
-.cube-style-card.selected {
+.cube-theme-card.selected {
   border-color: #667eea !important;
   background: rgba(102, 126, 234, 0.8) !important;
   transform: translateY(-2px);
@@ -310,7 +438,7 @@ function confirmSelection() {
 }
 
 .card-icon,
-.style-preview {
+.theme-preview {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -369,61 +497,21 @@ function confirmSelection() {
   opacity: 0.8;
 }
 
-.style-icon {
-  width: 50px;
-  height: 50px;
-  border-radius: 50%;
-  position: relative;
-  animation: spin 4s linear infinite;
+/* 主题颜色预览 */
+.theme-colors {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
+  width: 60px;
+  height: 60px;
 }
 
-.style-classic {
-  background: linear-gradient(135deg, #667eea, #764ba2);
-}
-
-.style-classic::before {
-  content: '';
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  width: 30px;
-  height: 30px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.9);
+.color-swatch {
+  width: 100%;
+  height: 100%;
+  border-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-}
-
-.style-coolBlue {
-  background: linear-gradient(135deg, #00d4ff, #0066cc);
-  box-shadow: 0 4px 20px rgba(0, 212, 255, 0.3);
-}
-
-.style-coolBlue::before {
-  content: '';
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  width: 20px;
-  height: 20px;
-  border-radius: 2px;
-  background: rgba(255, 255, 255, 0.9);
-  box-shadow: 0 0 10px rgba(0, 212, 255, 0.5);
-}
-
-.style-coolBlue::after {
-  content: '';
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  width: 35px;
-  height: 35px;
-  border: 2px solid rgba(255, 255, 255, 0.6);
-  border-radius: 50%;
-  border-top-color: transparent;
-  border-right-color: transparent;
 }
 
 .card-content {
@@ -446,35 +534,98 @@ function confirmSelection() {
   text-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
 }
 
-.selection-status {
-  text-align: center;
-  margin: 1.5rem 0;
-  padding: 1rem;
-  background: rgba(255, 255, 255, 0.1);
+/* 移动端下拉菜单样式 */
+.dropdown-container {
+  position: relative;
+  width: 100%;
+}
+
+.dropdown-trigger {
+  width: 100%;
+  background: rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(10px);
+  border: 2px solid rgba(255, 255, 255, 0.2);
   border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-}
-
-.status-text {
-  margin: 0;
-  font-size: 0.9rem;
-  color: rgba(255, 255, 255, 0.7);
+  padding: 1rem 1.5rem;
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 1rem;
+  cursor: pointer;
   display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.status-text span {
-  display: block;
-  padding: 0.25rem 0;
+  align-items: center;
+  justify-content: space-between;
   transition: all 0.3s ease;
+  text-align: left;
 }
 
-.status-text span.completed {
-  color: rgba(102, 126, 234, 1);
-  font-weight: 600;
-  text-shadow: 0 0 10px rgba(102, 126, 234, 0.3);
+.dropdown-trigger:hover {
+  background: rgba(255, 255, 255, 0.25);
+  border-color: rgba(255, 255, 255, 0.4);
 }
+
+.dropdown-trigger.active {
+  border-color: #667eea;
+  background: rgba(102, 126, 234, 0.2);
+}
+
+.dropdown-text {
+  flex: 1;
+  text-align: left;
+}
+
+.dropdown-arrow {
+  font-size: 0.8rem;
+  transition: transform 0.3s ease;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.dropdown-trigger.active .dropdown-arrow {
+  transform: rotate(180deg);
+}
+
+.dropdown-menu {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: rgba(0, 0, 0, 0.9);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 12px;
+  margin-top: 0.5rem;
+  max-height: 300px;
+  overflow-y: auto;
+  z-index: 1000;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+}
+
+.dropdown-item {
+  padding: 0.875rem 1.5rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  text-align: center;
+}
+
+.dropdown-item:last-child {
+  border-bottom: none;
+}
+
+.dropdown-item:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.dropdown-item.selected {
+  background: rgba(102, 126, 234, 0.3);
+  color: rgba(255, 255, 255, 0.9);
+  font-weight: 600;
+}
+
+.dropdown-item-text {
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 1rem;
+}
+
+
 
 .action-section {
   text-align: center;
@@ -537,11 +688,6 @@ function confirmSelection() {
   50% { transform: translateY(-10px); }
 }
 
-@keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}
-
 /* 响应式设计 */
 @media (max-width: 768px) {
   .cube-selection {
@@ -563,22 +709,18 @@ function confirmSelection() {
     gap: 1.5rem;
   }
 
-  .left-section,
-  .right-section {
-    margin: 0;
+  /* 移动端显示下拉菜单，隐藏网格 */
+  .desktop-only {
+    display: none;
   }
 
-  .cube-type-grid {
-    grid-template-columns: repeat(3, 1fr);
-    gap: 0.8rem;
+  .mobile-only {
+    display: block;
   }
 
-  .cube-type-card {
-    padding: 1rem;
-  }
-
-  .cube-style-card {
-    padding: 1.5rem;
+  .section-title {
+    font-size: 1.25rem;
+    margin-bottom: 1rem;
   }
 
   .confirm-btn {
@@ -589,43 +731,34 @@ function confirmSelection() {
 
 @media (max-width: 480px) {
   .selection-container {
-    padding: 1.5rem;
+    padding: 1rem;
   }
 
   .selection-title {
     font-size: 1.75rem;
+    margin-bottom: 1.5rem;
   }
 
   .section-title {
-    font-size: 1.25rem;
+    font-size: 1.125rem;
   }
 
-  .cube-type-grid {
-    grid-template-columns: repeat(2, 1fr);
-    gap: 0.6rem;
+  .dropdown-trigger {
+    padding: 0.875rem 1.25rem;
+    font-size: 0.9rem;
   }
 
-  .cube-type-card {
-    padding: 0.8rem;
-  }
+     .dropdown-item {
+     padding: 0.75rem 1.25rem;
+   }
 
-  .card-icon,
-  .style-preview {
-    height: 50px;
-    margin-bottom: 0.6rem;
-  }
+   .dropdown-item-text {
+     font-size: 0.9rem;
+   }
 
-  .cube-icon {
-    width: 40px;
-    height: 40px;
-  }
-
-  .card-title {
-    font-size: 1rem;
-  }
-
-  .card-description {
-    font-size: 0.75rem;
+  .confirm-btn {
+    padding: 0.75rem 1.5rem;
+    font-size: 0.9rem;
   }
 }
 </style>

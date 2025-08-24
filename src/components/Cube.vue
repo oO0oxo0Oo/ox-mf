@@ -38,6 +38,7 @@ import { useAnimationStore } from '../stores/animation.js'
 import { useTimeline } from '../composable/useTimeline.js'
 import { TimelineAnimationManager } from '../animations/timelineAnimations.js'
 import { getThemeColors } from '../config/themes.js'
+import { useRotationQueue } from '../composable/useRotationQueue.js'
 
 // ===== 组件配置 =====
 const props = defineProps({
@@ -57,6 +58,7 @@ const worldComponent = ref(null)
 // ===== Store 实例 =====
 const cubeStore = useCubeStore()
 const animationStore = useAnimationStore()
+const rotationQueue = useRotationQueue()
 
 // ===== 状态管理 =====
 const state = ref({
@@ -88,28 +90,19 @@ const timeline = useTimeline()
 // 监听魔方边长变化，实时更新魔方
 watch(() => cubeStore.config.pieceSize, (newSize, oldSize) => {
   if (state.value.cubeInstance?.updatePieceSize) {
-    // 现代方式：使用响应式验证
-    if (isValidSize(newSize)) {
-      state.value.cubeInstance.updatePieceSize(newSize)
-    } else {
-      console.warn('接收到无效的魔方尺寸:', newSize)
-    }
+    state.value.cubeInstance.updatePieceSize(newSize)
   }
 }, { immediate: false })
 
 // 监听圆角半径变化
 watch(() => cubeStore.config.pieceCornerRadius, (newRadius, oldRadius) => {
   if (state.value.cubeInstance?.updatePieceCornerRadius) {
-    if (isValidRadius(newRadius)) {
-      state.value.cubeInstance.updatePieceCornerRadius(newRadius)
-    } else {
-      console.warn('接收到无效的圆角半径:', newRadius)
-    }
+    state.value.cubeInstance.updatePieceCornerRadius(newRadius)
   }
 }, { immediate: false })
 
 // 监听主题变化，实时更新魔方颜色
-watch(() => props.cubeConfig.theme, (newTheme) => {
+watch(() => cubeStore.config.theme, (newTheme) => {
   if (newTheme && state.value.cubeInstance?.updateColors) {
     const colors = getThemeColors(newTheme)
     state.value.cubeInstance.updateColors(colors)
@@ -123,7 +116,7 @@ watch(() => props.cubeConfig.theme, (newTheme) => {
 
 // ===== 核心方法 =====
 
-// 现代方式：初始化动画系统
+//初始化动画系统
 function initAnimationSystem() {
   if (!worldComponent.value) {
     console.warn('World组件未准备好，无法初始化动画系统')
@@ -175,6 +168,9 @@ function initCube() {
   // 获取魔方实例
   state.value.cubeInstance = cubeStore.getCubeInstance()
   
+  // 设置魔方实例到旋转队列
+  rotationQueue.setCubeInstance(state.value.cubeInstance)
+  
   // 初始化控制模块
   initControls()
   
@@ -200,6 +196,10 @@ function initControls() {
   state.value.controls = useControls(worldRef, state.value.cubeInstance, worldComponent.value.camera, worldComponent.value)
   state.value.controls.init()
   state.value.controls.enable()
+  
+  // 设置控制实例到旋转队列
+  rotationQueue.setControlsInstance(state.value.controls)
+  
   return true
 }
 
@@ -249,16 +249,6 @@ function handleResetWorldRotation() {
 
 // ===== 工具函数 =====
 
-// 验证尺寸值
-function isValidSize(size) {
-  return typeof size === 'number' && !isNaN(size) && size > 0
-}
-
-// 验证半径值
-function isValidRadius(radius) {
-  return typeof radius === 'number' && !isNaN(radius) && radius >= 0
-}
-
 // 检查World是否准备好
 function isWorldReady() {
   return worldComponent.value?.scene && worldComponent.value?.camera
@@ -291,7 +281,7 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-@import url('https://fonts.googleapis.com/css?family=Poppins:700');
+/* @import url('https://fonts.googleapis.com/css?family=Poppins:700'); */
 
 .cube-demo {
   width: 100%;
@@ -342,7 +332,14 @@ onUnmounted(() => {
   flex: 1;
   position: relative;
   background: transparent;
-  z-index: 10; /* 确保魔方在blob之上 */
+  z-index: 10; 
+  transform: translateY(-6vh);
+}
+
+@media (max-width: 768px) {
+  .world-container {
+    transform: translateY(-10vh);
+  }
 }
 
 .reset-world-btn {

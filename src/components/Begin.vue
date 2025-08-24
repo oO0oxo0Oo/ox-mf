@@ -103,6 +103,12 @@ const gapSizeMultiplier = ref(0.0)  // 间隙倍数，从0开始
 const cubeSizeMultiplier = ref(60.0)  // 大正方体边长倍数
 const opacityMultiplier = ref(0.9)  // 粒子透明度倍数
 
+// 移动端透明度优化 - 让手机端更亮
+if (/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)) {
+  opacityMultiplier.value = 1.2  // 移动端提高透明度 (从0.9到1.0)
+  cubeSizeMultiplier.value = 55.0  // 移动端立方体更小
+}
+
 // ===== Three.js 核心变量 =====
 let scene, camera, renderer, particles         // Three.js 核心对象
 let composer                                   // 后处理效果组合器
@@ -417,7 +423,6 @@ function createParticleSystem() {
 function init() {
   // 创建场景
   scene = new THREE.Scene()
-  
   // 创建透视相机
   // 参数：视野角度(75°), 宽高比, 近裁剪面(0.1), 远裁剪面(1000)
   camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000)
@@ -440,7 +445,14 @@ function init() {
     alpha: true       // 启用透明度
   })
   renderer.setSize(window.innerWidth, window.innerHeight)  // 设置渲染尺寸
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))  // 设置像素比（限制最大值为2）
+  
+  // 移动端像素比优化 - 平衡清晰度和性能
+  if (/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)) {
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.8))  // 移动端限制像素比
+  } else {
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))  // 桌面端保持原有设置
+  }
+  
   renderer.setClearColor(0x000000, 0)  // 设置背景色（透明）
   
   // 将渲染器的canvas添加到DOM容器
@@ -460,6 +472,13 @@ function init() {
     0.3,   // 泛光半径
     0.65   // 泛光阈值
   )
+  
+  // 移动端泛光优化 - 让手机端更亮
+  if (/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)) {
+    bloomPass.intensity = 0.35    // 提高移动端泛光强度 (从0.25到0.35)
+    bloomPass.threshold = 0.55    // 降低移动端泛光阈值 (从0.65到0.55)
+  }
+  
   composer.addPass(bloomPass)
   
   // 添加输出通道（处理最终的颜色空间转换）
@@ -547,6 +566,105 @@ function addEventListeners() {
   addWindowListener('mousemove', (event) => {
     updateScreenMouse(event.clientX, event.clientY)
   })
+  
+  // 添加触摸事件处理
+  addTouchEventListeners()
+}
+
+// 触摸事件处理
+function addTouchEventListeners() {
+  if (container.value) {
+    let touchStartX = 0
+    let touchStartY = 0
+    let isTouching = false
+    
+    // 触摸开始
+    container.value.addEventListener('touchstart', (e) => {
+      // 检查触摸位置是否在按钮区域
+      const touch = e.touches[0]
+      const target = e.target
+      
+      // 如果触摸的是按钮，不阻止默认行为，让按钮可以正常点击
+      if (target.closest('.start-btn') || target.closest('.animation-controls')) {
+        return // 不阻止默认行为，让按钮可以点击
+      }
+      
+      e.preventDefault()
+      touchStartX = touch.clientX
+      touchStartY = touch.clientY
+      isTouching = true
+    }, { passive: false })
+    
+    // 触摸移动
+    container.value.addEventListener('touchmove', (e) => {
+      // 检查触摸位置是否在按钮区域
+      const target = e.target
+      if (target.closest('.start-btn') || target.closest('.animation-controls')) {
+        return // 如果触摸的是按钮，不处理相机旋转
+      }
+      
+      e.preventDefault()
+      if (!isTouching) return
+      
+      const touch = e.touches[0]
+      const deltaX = touch.clientX - touchStartX
+      const deltaY = touch.clientY - touchStartY
+      
+      // 更新相机旋转
+      targetRotationX.value -= deltaX * 0.01
+      targetRotationY.value += deltaY * 0.01
+      
+      // 限制垂直角度
+      targetRotationY.value = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, targetRotationY.value))
+      
+      // 更新触摸位置用于粒子交互
+      updateScreenMouse(touch.clientX, touch.clientY)
+      
+      touchStartX = touch.clientX
+      touchStartY = touch.clientY
+    }, { passive: false })
+    
+    // 触摸结束 - 清除粒子斥力效果
+    container.value.addEventListener('touchend', (e) => {
+      // 检查触摸位置是否在按钮区域
+      const target = e.target
+      if (target.closest('.start-btn') || target.closest('.animation-controls')) {
+        return // 如果触摸的是按钮，不处理触摸结束逻辑
+      }
+      
+      e.preventDefault()
+      isTouching = false
+      
+      // 清除触摸位置，让粒子斥力消失
+      clearTouchInteraction()
+    }, { passive: false })
+    
+    // 触摸取消 - 也要清除斥力效果
+    container.value.addEventListener('touchcancel', (e) => {
+      // 检查触摸位置是否在按钮区域
+      const target = e.target
+      if (target.closest('.start-btn') || target.closest('.animation-controls')) {
+        return // 如果触摸的是按钮，不处理触摸取消逻辑
+      }
+      
+      e.preventDefault()
+      isTouching = false
+      
+      // 清除触摸位置，让粒子斥力消失
+      clearTouchInteraction()
+    }, { passive: false })
+  }
+}
+
+// 清除触摸交互效果
+function clearTouchInteraction() {
+  // 将触摸位置设置为远离屏幕的位置，清除斥力效果
+  updateScreenMouse(10000, 10000)
+  
+  // 如果粒子材质存在，直接更新鼠标位置uniform
+  if (particles && particles.material && particles.material.uniforms) {
+    particles.material.uniforms.mousePos.value.set(10000, 10000, 0)
+  }
 }
 
 
@@ -558,6 +676,14 @@ function removeEventListeners() {
   if (dragSystem) {
     dragSystem.disable()
     dragSystem = null
+  }
+  
+  // 清理触摸事件监听器
+  if (container.value) {
+    container.value.removeEventListener('touchstart', null)
+    container.value.removeEventListener('touchmove', null)
+    container.value.removeEventListener('touchend', null)
+    container.value.removeEventListener('touchcancel', null)
   }
 }
 
@@ -963,6 +1089,7 @@ function continueToNextPhase() {
   font-family: sans-serif;
   transition: background-color 0.3s ease;
   text-shadow: 0 0 3px rgba(0, 0, 0, 0.5);
+  z-index: 100;
 }
 
 .start-btn:hover {
