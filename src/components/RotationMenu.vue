@@ -1,14 +1,26 @@
 <script setup>
 import { useRotationQueue } from "../composable/useRotationQueue";
 import { useCubeStore } from "../stores/cube";
-import { computed, ref, watch } from "vue";
+import { computed, ref, watch, onMounted, onUnmounted } from "vue";
 import { getThemeColors } from "../config/themes.js";
+import { 
+	Check, 
+	Close, 
+	Refresh, 
+	View, 
+	Delete, 
+	Remove 
+} from '@element-plus/icons-vue';
 
 const rotationQueue = useRotationQueue();
 const cubeStore = useCubeStore();
 
 // 控制状态
 const isDraggingEnabled = ref(true);
+
+// 下拉选择器状态
+const isThemeDropdownOpen = ref(false);
+const isCubeTypeDropdownOpen = ref(false);
 
 // 定义事件
 const emit = defineEmits(['toggle-dragging', 'reset-cube', 'reset-world-rotation']);
@@ -19,6 +31,14 @@ const scramble = () => {
 const solve = () =>{
 	console.log(cubeStore.solve(),"!!!!!!")
 }
+
+// 清空旋转队列，只保留下一个元素
+const clearRotationQueue = () => {
+	if (rotationQueue.queueLength() > 1) {
+		rotationQueue.animationQueue().splice(1);
+	} 
+	return
+};
 
 // 禁用/启用拖拽
 const toggleDragging = () => {
@@ -82,119 +102,198 @@ function getFaceColor(face) {
 }
 
 // 计算属性
-const queueLength = computed(() => rotationQueue.queueLength());
-const animationStatus = computed(() => rotationQueue.getAnimationEngineStatus());
-const hasCurrentRotation = computed(() => rotationQueue.hasCurrentRotation());
 const isRotating = computed(() => rotationQueue.isRotating());
 
 // 主题相关
 const currentTheme = ref(cubeStore.getCurrentTheme());
+const currentCubeType = ref(cubeStore.config.cubeType);
 const availableThemes = computed(() => cubeStore.getAvailableThemes());
+const availableCubeTypes = computed(() => cubeStore.availableCubeTypes);
 const currentThemeName = computed(() => {
   const theme = availableThemes.value.find(t => t.key === currentTheme.value);
   return theme ? theme.name : '经典';
 });
 
 // 主题切换处理函数
-const handleThemeChange = () => {
-  console.log('尝试切换主题到:', currentTheme.value);
-  console.log('可用主题:', availableThemes.value);
-  
-  const success = cubeStore.setTheme(currentTheme.value);
-  if (!success) {
-    console.error('主题切换失败:', currentTheme.value);
-    // 如果切换失败，恢复原来的主题
-    currentTheme.value = cubeStore.getCurrentTheme();
-  } else {
-    console.log('主题切换成功:', currentTheme.value);
+const handleThemeChange = (themeKey) => {
+    currentTheme.value = themeKey;
+    cubeStore.setTheme(themeKey);
+    isThemeDropdownOpen.value = false;
+};
+
+const handleCubeTypeChange = (cubeType) => {
+  currentCubeType.value = cubeType;
+  cubeStore.setCubeType(cubeType);
+  isCubeTypeDropdownOpen.value = false;
+};
+
+// 切换下拉菜单状态
+const toggleThemeDropdown = () => {
+  isThemeDropdownOpen.value = !isThemeDropdownOpen.value;
+  if (isThemeDropdownOpen.value) {
+    isCubeTypeDropdownOpen.value = false;
   }
 };
+
+const toggleCubeTypeDropdown = () => {
+  isCubeTypeDropdownOpen.value = !isCubeTypeDropdownOpen.value;
+  if (isCubeTypeDropdownOpen.value) {
+    isThemeDropdownOpen.value = false;
+  }
+};
+
+// 点击外部关闭下拉菜单
+const closeDropdowns = () => {
+  isThemeDropdownOpen.value = false;
+  isCubeTypeDropdownOpen.value = false;
+};
+
+// 全局点击事件处理
+const handleGlobalClick = (event) => {
+  // 检查点击是否在主题切换区域外部
+  const themeToggle = document.querySelector('.theme-toggle');
+  
+  if (themeToggle && !themeToggle.contains(event.target)) {
+    // 如果点击在主题切换区域外，关闭所有下拉菜单
+    closeDropdowns();
+  }
+};
+
+// 组件挂载时添加全局点击监听
+onMounted(() => {
+  document.addEventListener('click', handleGlobalClick);
+});
+
+// 组件卸载时移除全局点击监听
+onUnmounted(() => {
+  document.removeEventListener('click', handleGlobalClick);
+});
 
 // 监听store中主题的变化，同步更新本地状态
 watch(() => cubeStore.config.theme, (newTheme) => {
   console.log('主题变化监听器触发，新主题:', newTheme);
   currentTheme.value = newTheme;
 }, { immediate: true });
+
+watch(() => cubeStore.config.cubeType, (newCubeType) => {
+  console.log('魔方类型变化监听器触发，新类型:', newCubeType);
+  currentCubeType.value = newCubeType;
+}, { immediate: true });
 </script>
 
 <template>
 	<!-- 主题切换下拉菜单 - 左上角 -->
 	<div class="theme-toggle">
-		<select 
-			class="theme-select"
-			v-model="currentTheme"
-			@change="handleThemeChange"
-			:title="`当前主题: ${currentThemeName}`"
-		>
-			<option 
-				v-for="theme in availableThemes" 
-				:key="theme.key" 
-				:value="theme.key"
+		<!-- 主题选择器 -->
+		<div class="custom-select" style="--select-index: 0">
+			<button 
+				@click="toggleThemeDropdown"
+				class="select-trigger"
+				:title="`当前主题: ${currentThemeName}`"
 			>
-				{{ theme.name }}
-			</option>
-		</select>
+				<span class="select-value">{{ currentThemeName }}</span>
+				<span class="select-arrow" :class="{ 'open': isThemeDropdownOpen }">▼</span>
+			</button>
+			
+			<div 
+				v-if="isThemeDropdownOpen" 
+				class="select-dropdown"
+			>
+				<div 
+					v-for="theme in availableThemes" 
+					:key="theme.key"
+					@click="handleThemeChange(theme.key)"
+					class="select-option"
+					:class="{ 'active': currentTheme === theme.key }"
+				>
+					{{ theme.name }}
+				</div>
+			</div>
+		</div>
+
+		<!-- 魔方类型选择器 -->
+		<div class="custom-select" style="--select-index: 1">
+			<button 
+				@click="toggleCubeTypeDropdown"
+				class="select-trigger"
+				:title="`当前魔方类型: ${currentCubeType}`"
+			>
+				<span class="select-value">{{ currentCubeType }}</span>
+				<span class="select-arrow" :class="{ 'open': isCubeTypeDropdownOpen }">▼</span>
+			</button>
+			
+			<div 
+				v-if="isCubeTypeDropdownOpen" 
+				class="select-dropdown"
+			>
+				<div 
+					v-for="cubeType in availableCubeTypes" 
+					:key="cubeType"
+					@click="handleCubeTypeChange(cubeType)"
+					class="select-option"
+					:class="{ 'active': currentCubeType === cubeType }"
+				>
+					{{ cubeType }}
+				</div>
+			</div>
+		</div>
 	</div>
 
 	<!-- 控制按钮 - 右上角 -->
 	<div class="control-toggle">
-		<button 
-			class="control-btn icon-btn"
-			@click="toggleDragging"
-			:title="isDraggingEnabled ? '禁用拖拽' : '启用拖拽'"
-			:class="{ 'disabled': !isDraggingEnabled }"
-		>
-			<svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-				<path d="M9 12l2 2 4-4"/>
-				<path d="M21 12c0 4.97-4.03 9-9 9s-9-4.03-9-9 4.03-9 9-9 9 4.03 9 9z"/>
-			</svg>
-		</button>
-		<button 
-			class="control-btn icon-btn reset-btn"
-			@click="resetCube"
-			title="还原魔方"
-		>
-			<svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-				<path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/>
-				<path d="M21 3v5h-5"/>
-				<path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/>
-				<path d="M3 21v-5h5"/>
-			</svg>
-		</button>
-		<!-- 新增：重置整体旋转按钮 -->
-		<button 
-			class="control-btn icon-btn reset-world-btn"
-			@click="resetWorldRotation"
-			title="重置视角"
-		>
-			<svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-				<path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/>
-				<path d="M21 3v5h-5"/>
-				<path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/>
-				<path d="M3 21v-5h5"/>
-			</svg>
-		</button>
-		<!-- 打乱按钮 -->
-		<button 
-			class="control-btn icon-btn scramble-btn"
-			@click="scramble"
-			title="打乱魔方"
-		>
-			<svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-				<path d="M3 6h18"/>
-				<path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/>
-				<path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
-			</svg>
-		</button>
-		<!-- 求解按钮 -->
-		<!-- <button 
-			class="control-btn solve-btn"
-			@click="solve"
-			title="求解十字"
-		>
-			<span class="btn-icon">🎯</span>
-			<span class="btn-text">求解</span>
-		</button> -->
+		<el-tooltip content="拖拽控制" placement="bottom">
+			<button 
+				@click="toggleDragging"
+				:class="{ 'disabled': !isDraggingEnabled }"
+				class="control-btn"
+				style="--btn-index: 0"
+			>
+				<Check v-if="isDraggingEnabled" />
+				<Close v-else />
+			</button>
+		</el-tooltip>
+		
+		<el-tooltip content="还原魔方" placement="bottom">
+			<button 
+				@click="resetCube"
+				:disabled="!cubeStore.isOperationEnabled"
+				class="control-btn"
+				style="--btn-index: 1"
+			>
+				<Refresh />
+			</button>
+		</el-tooltip>
+		
+		<el-tooltip content="重置视角" placement="bottom">
+			<button 
+				@click="resetWorldRotation"
+				:disabled="!cubeStore.isOperationEnabled"
+				class="control-btn"
+				style="--btn-index: 2"
+			>
+				<View />
+			</button>
+		</el-tooltip>
+		
+		<el-tooltip content="打乱魔方" placement="bottom">
+			<button 
+				@click="scramble"
+				class="control-btn"
+				style="--btn-index: 3"
+			>
+				<Delete />
+			</button>
+		</el-tooltip>
+		
+		<el-tooltip content="清空旋转队列" placement="bottom">
+			<button 
+				@click="clearRotationQueue"
+				class="control-btn"
+				style="--btn-index: 4"
+			>
+				<Remove />
+			</button>
+		</el-tooltip>
 	</div>
 
 	<!-- 旋转菜单 - 底部中央 -->
@@ -203,38 +302,45 @@ watch(() => cubeStore.config.theme, (newTheme) => {
 		<div class="rotation-container">
 			<!-- 上排按钮 -->
 			<div class="rotation-row top-row">
-				<button
-					v-for="btn in topRowButtons"
+				<el-button
+					v-for="(btn, index) in topRowButtons"
 					:key="`${btn.face}-${btn.direction}`"
-					class="rotation-btn"
-					:class="{ 
-						'btn-primary': btn.direction === 1,
-						'btn-secondary': btn.direction === -1
+					:type="btn.direction === 1 ? 'primary' : 'success'"
+					:style="{ 
+						'--btn-color': btn.color,
+						'background-color': btn.color,
+						'border-color': btn.color,
+						'color': '#000',
+						'--btn-index': index
 					}"
-					:style="{ '--btn-color': btn.color }"
 					@click="handleRotate(btn.face, btn.direction)"
+					class="rotation-btn"
+					:disabled="isRotating"
 				>
-					<span class="btn-label">{{ btn.label }}</span>
-				</button>
+					{{ btn.label }}
+				</el-button>
 			</div>
 
 			<!-- 下排按钮 -->
 			<div class="rotation-row bottom-row">
-				<button
-					v-for="btn in bottomRowButtons"
+				<el-button
+					v-for="(btn, index) in bottomRowButtons"
 					:key="`${btn.face}-${btn.direction}`"
-					class="rotation-btn"
-					:class="{ 
-						'btn-primary': btn.direction === 1,
-						'btn-secondary': btn.direction === -1,
-						'rotating': isRotating
+					:type="btn.direction === 1 ? 'primary' : 'success'"
+					:style="{ 
+						'--btn-color': btn.color,
+						'background-color': btn.color,
+						'border-color': btn.color,
+						'color': '#000',
+						'--btn-index': index + 6
 					}"
-					:style="{ '--btn-color': btn.color }"
 					@click="handleRotate(btn.face, btn.direction)"
+					class="rotation-btn"
 					:disabled="isRotating"
+					:class="{ 'rotating': isRotating }"
 				>
-					<span class="btn-label">{{ btn.label }}</span>
-				</button>
+					{{ btn.label }}
+				</el-button>
 			</div>
 		</div>
 	</div>
@@ -247,44 +353,146 @@ watch(() => cubeStore.config.theme, (newTheme) => {
 	top: 20px;
 	left: 20px;
 	z-index: 20;
+	display: flex;
+	gap: 10px;
 }
 
 .theme-select {
-	background: linear-gradient(145deg, rgba(255, 255, 255, 0.15), rgba(255, 255, 255, 0.08));
-	border: 2px solid rgba(255, 255, 255, 0.3);
-	border-radius: 12px;
-	padding: 10px 16px;
-	color: white;
-	font-weight: 500;
-	font-size: 0.9rem;
-	cursor: pointer;
-	transition: all 0.3s ease;
-	backdrop-filter: blur(10px);
-	min-width: 120px;
-	appearance: none;
-	background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6,9 12,15 18,9'%3e%3c/polyline%3e%3c/svg%3e");
-	background-repeat: no-repeat;
-	background-position: right 12px center;
-	background-size: 16px;
-	padding-right: 40px;
+	width: 140px;
 }
 
-.theme-select:hover {
-	background: linear-gradient(145deg, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.12));
+/* 自定义下拉选择器样式 */
+.custom-select {
+	position: relative;
+	width: 140px;
+	z-index: 1000;
+}
+
+.select-trigger {
+	width: 100%;
+	height: 36px;
+	background: transparent;
+	border: 1px solid rgba(255, 255, 255, 0.3);
+	border-radius: 6px;
+	color: white;
+	font-size: 14px;
+	cursor: pointer;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 0 12px;
+	transition: all 0.3s ease;
+	backdrop-filter: blur(10px);
+	animation: selectSlideIn 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94) both;
+	animation-delay: calc(var(--select-index, 0) * 0.3s);
+}
+
+.select-trigger:hover {
+	background: rgba(255, 255, 255, 0.1);
 	border-color: rgba(255, 255, 255, 0.5);
 }
 
-.theme-select:focus {
+.select-trigger:focus {
 	outline: none;
 	border-color: rgba(255, 255, 255, 0.7);
-	box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.1);
+	box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.2);
 }
 
-.theme-select option {
-	background: rgba(0, 0, 0, 0.8);
+.select-value {
+	flex: 1;
+	text-align: left;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.select-arrow {
+	font-size: 10px;
+	transition: transform 0.3s ease;
+	color: rgba(255, 255, 255, 0.7);
+}
+
+.select-arrow.open {
+	transform: rotate(180deg);
+}
+
+.select-dropdown {
+	position: absolute;
+	top: 100%;
+	left: 0;
+	right: 0;
+	background:transparent;
+	backdrop-filter: blur(20px);
+	border: 1px solid rgba(255, 255, 255, 0.2);
+	border-radius: 6px;
+	margin-top: 4px;
+	z-index: 1000;
+	max-height: 200px;
+	overflow-y: auto;
+}
+
+.select-option {
+	padding: 10px 12px;
 	color: white;
-	border: none;
-	padding: 8px;
+	cursor: pointer;
+	transition: all 0.2s ease;
+	border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.select-option:last-child {
+	border-bottom: none;
+}
+
+.select-option:hover {
+	background: rgba(255, 255, 255, 0.1);
+}
+
+.select-option.active {
+	background: rgba(255, 255, 255, 0.2);
+	color: #fff;
+	font-weight: 500;
+}
+
+/* 下拉菜单动画 */
+@keyframes dropdownSlideIn {
+	from {
+		opacity: 0;
+		transform: translateY(-20px);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0);
+	}
+}
+
+/* 选择器入场动画 */
+@keyframes selectSlideIn {
+	from {
+		opacity: 0;
+		transform: translateY(-30px);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0);
+	}
+}
+
+/* 滚动条样式 */
+.select-dropdown::-webkit-scrollbar {
+	width: 6px;
+}
+
+.select-dropdown::-webkit-scrollbar-track {
+	background: transparent;
+}
+
+.select-dropdown::-webkit-scrollbar-thumb {
+	background: rgba(255, 255, 255, 0.3);
+	border-radius: 3px;
+}
+
+.select-dropdown::-webkit-scrollbar-thumb:hover {
+	background: rgba(255, 255, 255, 0.5);
 }
 
 /* 控制按钮样式 - 右上角 */
@@ -292,72 +500,65 @@ watch(() => cubeStore.config.theme, (newTheme) => {
 	position: absolute;
 	top: 20px;
 	right: 20px;
-	display: flex;
-	gap: 8px;
 	z-index: 20;
+	display: flex;
+	gap: 12px;
 }
 
-.control-toggle .control-btn {
-	background: linear-gradient(145deg, rgba(255, 255, 255, 0.15), rgba(255, 255, 255, 0.08));
-	border: 2px solid rgba(255, 255, 255, 0.3);
-	border-radius: 12px;
-	padding: 10px 16px;
-	color: white;
-	font-weight: 500;
-	font-size: 0.9rem;
+.control-btn {
+	width: 48px;
+	height: 48px;
+	background: rgba(255, 255, 255, 0.1);
+	border: 2px solid rgba(255, 255, 255, 0.2);
+	backdrop-filter: blur(10px);
+	transition: all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+	border-radius: 50%;
 	cursor: pointer;
-	transition: all 0.3s ease;
 	display: flex;
 	align-items: center;
-	gap: 8px;
-	backdrop-filter: blur(10px);
-}
-
-/* 简约图标按钮样式 */
-.control-toggle .icon-btn {
-	padding: 12px;
-	min-width: 44px;
-	min-height: 44px;
 	justify-content: center;
-	border-radius: 50%;
-	background: linear-gradient(145deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.05));
-	border: 1px solid rgba(255, 255, 255, 0.2);
+	outline: none;
+	/* Q弹开场动画 - 使用更丝滑的缓动函数 */
+	animation: controlBtnBounce 1.4s cubic-bezier(0.25, 0.46, 0.45, 0.94) both;
+	animation-delay: calc(var(--btn-index, 0) * 0.12s);
+	/* 添加微妙的呼吸效果 */
+	animation-fill-mode: both;
+	/* 开场动画结束后开始呼吸效果 */
+	animation: controlBtnBounce 1.4s cubic-bezier(0.25, 0.46, 0.45, 0.94) both, controlBtnBreath 4s cubic-bezier(0.4, 0, 0.2, 1) infinite 1.6s;
+	animation-delay: calc(var(--btn-index, 0) * 0.12s), calc(var(--btn-index, 0) * 0.12s + 1.4s);
 }
 
-.control-toggle .icon-btn:hover {
-	background: linear-gradient(145deg, rgba(255, 255, 255, 0.15), rgba(255, 255, 255, 0.08));
-	transform: translateY(-2px);
-	box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
-	border-color: rgba(255, 255, 255, 0.4);
+.control-btn:hover {
+	transform: translateY(-4px) scale(1.08);
+	box-shadow: 0 8px 25px rgba(0, 0, 0, 0.5);
+	background: rgba(255, 255, 255, 0.3);
+	border-color: rgba(255, 255, 255, 0.5);
+	transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
-.control-toggle .icon-btn.disabled {
-	opacity: 0.6;
-	background: linear-gradient(145deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.03));
+.control-btn:active {
+	transform: translateY(-2px) scale(0.92);
+	transition: all 0.08s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
-.control-toggle .icon-btn.disabled:hover {
+.control-btn:disabled {
+	opacity: 0.4;
+	background: rgba(255, 255, 255, 0.05);
+	border-color: rgba(255, 255, 255, 0.1);
+	transform: none;
+}
+
+.control-btn:disabled:hover {
 	transform: none;
 	box-shadow: none;
+	background: rgba(255, 255, 255, 0.05);
 }
 
-.control-toggle .btn-icon {
-	font-size: 1.4rem;
+/* 确保图标正确显示 */
+.control-btn svg {
 	width: 20px;
 	height: 20px;
-	color: rgba(255, 255, 255, 0.9);
-	transition: all 0.3s ease;
-}
-
-/* SVG图标悬停效果 */
-.control-toggle .icon-btn:hover .btn-icon {
-	color: rgba(255, 255, 255, 1);
-	transform: scale(1.1);
-}
-
-/* 禁用状态的图标 */
-.control-toggle .icon-btn.disabled .btn-icon {
-	color: rgba(255, 255, 255, 0.5);
+	color: white;
 }
 
 /* 旋转菜单样式 - 底部中央 */
@@ -366,337 +567,215 @@ watch(() => cubeStore.config.theme, (newTheme) => {
 	bottom: 0;
 	left: 0;
 	right: 0;
-	padding: 10px;
+	padding: 20px;
 	max-width: 800px;
 	margin: 0 auto;
 	z-index: 20;
 	display: flex;
 	flex-direction: column;
 	align-items: center;
-	gap: 10px;
+	gap: 20px;
 }
 
-.menu-header {
-	display: flex;
-	justify-content: space-between;
-	align-items: center;
-	margin-bottom: 20px;
-	padding-bottom: 16px;
-	border-bottom: 2px solid rgba(255, 255, 255, 0.1);
-}
-
-.menu-title {
-	color: white;
-	margin: 0;
-	font-size: 1.5rem;
-	font-weight: 600;
-	text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
-}
-
-.menu-status {
+.rotation-container {
 	display: flex;
 	flex-direction: column;
-	align-items: flex-end;
-	gap: 4px;
-}
-
-
-
-.queue-info {
-	color: rgba(255, 255, 255, 0.8);
-	font-size: 0.8rem;
-	font-weight: 500;
-}
-
-.animation-status {
-	color: rgba(255, 255, 255, 0.8);
-	font-size: 0.8rem;
-	font-weight: 500;
-	padding: 2px 8px;
-	border-radius: 12px;
-	background: rgba(255, 255, 255, 0.1);
-}
-
-.status-running {
-	background: rgba(0, 255, 0, 0.2);
-	color: #90EE90;
-}
-
-.status-paused {
-	background: rgba(255, 165, 0, 0.2);
-	color: #FFA500;
-}
-
-.status-idle {
-	background: rgba(128, 128, 128, 0.2);
-	color: rgba(255, 255, 255, 0.6);
-}
-
-.rotation-status {
-	color: #FFD700;
-	font-size: 0.8rem;
-	font-weight: 500;
-	animation: pulse 1.5s ease-in-out infinite alternate;
-}
-
-@keyframes pulse {
-	from {
-		opacity: 0.6;
-	}
-	to {
-		opacity: 1;
-	}
+	gap: 15px;
 }
 
 .rotation-row {
 	display: flex;
 	justify-content: center;
-	gap: 12px;
-	margin-bottom: 6px;
-}
-
-.rotation-row:last-child {
-	margin-bottom: 0;
+	gap: 15px;
 }
 
 .rotation-btn {
-	position: relative;
-	background: var(--btn-color);
-	border: 2px solid rgba(0, 0, 0, 0.3);
-	border-radius: 10px;
-	padding: 12px 8px;
-	color: #000;
+	min-width: 60px;
+	height: 60px;
+	font-size: 1.2rem;
 	font-weight: 700;
-	font-size: 1rem;
-	cursor: pointer;
-	transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-	overflow: hidden;
-	display: flex;
-	flex-direction: column;
-	align-items: center;
-	gap: 4px;
-	min-height: 50px;
-	min-width: 50px;
+	border-radius: 12px;
+	transition: all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
 	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+	/* 旋转按钮开场动画 - 更丝滑的弹跳 */
+	animation: rotationBtnBounce 1.8s cubic-bezier(0.25, 0.46, 0.45, 0.94) both;
+	animation-delay: calc(var(--btn-index, 0) * 0.06s);
+	opacity: 0;
 }
 
-/* 移除之前的伪元素样式，现在使用纯色背景 */
-
 .rotation-btn:hover {
-	transform: translateY(-2px);
-	box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
-	border-color: rgba(0, 0, 0, 0.5);
-	filter: brightness(1.1);
+	transform: translateY(-5px) scale(1.08);
+	box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
+	filter: brightness(1.2);
+	transition: all 0.35s cubic-bezier(0.25, 0.46, 0.45, 0.94);
 }
 
 .rotation-btn:active {
-	transform: translateY(0);
-	transition: transform 0.1s ease;
-}
-
-.rotation-btn:disabled {
-	opacity: 0.5;
-	cursor: not-allowed;
-	transform: none;
+	transform: translateY(-3px) scale(0.9);
+	transition: all 0.06s cubic-bezier(0.25, 0.46, 0.45, 0.94);
 }
 
 .rotation-btn.rotating {
 	animation: shake 0.5s ease-in-out;
 }
 
-.btn-label {
-	position: relative;
-	z-index: 1;
-	font-size: 1.1rem;
-	font-weight: 700;
-	text-shadow: 0 1px 2px rgba(255, 255, 255, 0.8);
-}
-
-.btn-primary {
-	border-color: rgba(255, 255, 255, 0.3);
-}
-
-.btn-secondary {
-	border-color: rgba(255, 255, 255, 0.2);
-	/* 移除background，让CSS变量生效 */
-}
-
-.control-btn {
-	background: linear-gradient(145deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.05));
-	border: 2px solid rgba(255, 255, 255, 0.2);
-	border-radius: 10px;
-	padding: 12px 20px;
-	color: white;
-	font-weight: 500;
-	font-size: 0.9rem;
-	cursor: pointer;
-	transition: all 0.3s ease;
-	display: flex;
-	align-items: center;
-	gap: 8px;
-}
-
-.control-btn:hover {
-	background: linear-gradient(145deg, rgba(255, 255, 255, 0.15), rgba(255, 255, 255, 0.08));
-	transform: translateY(-1px);
-	box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
-}
-
-.control-btn:disabled {
-	opacity: 0.5;
-	cursor: not-allowed;
-	transform: none;
-}
-
-.control-btn.reset-btn {
-	background: linear-gradient(145deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.05));
-	border: 2px solid rgba(255, 255, 255, 0.2);
-	border-radius: 10px;
-	padding: 12px 20px;
-	color: white;
-	font-weight: 500;
-	font-size: 0.9rem;
-	cursor: pointer;
-	transition: all 0.3s ease;
-	display: flex;
-	align-items: center;
-	gap: 8px;
-}
-
-.control-btn.reset-btn:hover {
-	background: linear-gradient(145deg, rgba(255, 255, 255, 0.15), rgba(255, 255, 255, 0.08));
-	transform: translateY(-1px);
-	box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
-}
-
-.control-btn.reset-btn:disabled {
-	opacity: 0.5;
-	cursor: not-allowed;
-	transform: none;
-}
-
-.btn-icon {
-	font-size: 1rem;
-}
-
-.btn-text {
-	font-size: 0.85rem;
-}
-
-.reset-world-btn {
-	background: linear-gradient(145deg, #667eea 0%, #764ba2 100%);
-	border-color: rgba(102, 126, 234, 0.3);
-}
-
-.reset-world-btn:hover {
-	background: linear-gradient(145deg, #5a6fd8 0%, #6a4190 100%);
-	transform: translateY(-2px);
-	box-shadow: 0 4px 16px rgba(102, 126, 234, 0.4);
-}
-
-/* 打乱按钮样式 */
-.scramble-btn {
-	background: linear-gradient(145deg, #ff6b6b 0%, #ee5a24 100%);
-	border-color: rgba(255, 107, 107, 0.3);
-}
-
-.scramble-btn:hover {
-	background: linear-gradient(145deg, #ff5252 0%, #e74c3c 100%);
-	transform: translateY(-2px);
-	box-shadow: 0 4px 16px rgba(255, 107, 107, 0.4);
-}
-
-/* 求解按钮样式 */
-.solve-btn {
-	background: linear-gradient(145deg, #00b894 0%, #00a085 100%);
-	border-color: rgba(0, 184, 148, 0.3);
-}
-
-.solve-btn:hover {
-	background: linear-gradient(145deg, #00a085 0%, #008f7a 100%);
-	transform: translateY(-2px);
-	box-shadow: 0 4px 16px rgba(0, 184, 148, 0.4);
-}
-
-/* 动画 */
+/* 动画效果 */
 @keyframes shake {
 	0%, 100% { transform: translateX(0); }
-	25% { transform: translateX(-2px); }
-	75% { transform: translateX(2px); }
+	25% { transform: translateX(-5px); }
+	75% { transform: translateX(5px); }
+}
+
+/* Q弹开场动画 - 更丝滑的弹跳效果 */
+@keyframes controlBtnBounce {
+	0% {
+		transform: scale(0) rotate(-180deg);
+		opacity: 0;
+	}
+	15% {
+		transform: scale(1.2) rotate(-120deg);
+		opacity: 0.5;
+	}
+	30% {
+		transform: scale(0.8) rotate(-60deg);
+		opacity: 0.7;
+	}
+	45% {
+		transform: scale(1.1) rotate(-20deg);
+		opacity: 0.85;
+	}
+	60% {
+		transform: scale(0.9) rotate(0deg);
+		opacity: 0.95;
+	}
+	75% {
+		transform: scale(1.05) rotate(0deg);
+		opacity: 1;
+	}
+	85% {
+		transform: scale(0.97) rotate(0deg);
+		opacity: 1;
+	}
+	95% {
+		transform: scale(1.01) rotate(0deg);
+		opacity: 1;
+	}
+	100% {
+		transform: scale(1) rotate(0deg);
+		opacity: 1;
+	}
+}
+
+/* 微妙的呼吸效果 - 更丝滑的缓动 */
+@keyframes controlBtnBreath {
+	0% {
+		transform: scale(1);
+	}
+	25% {
+		transform: scale(1.02);
+	}
+	50% {
+		transform: scale(1.05);
+	}
+	75% {
+		transform: scale(1.02);
+	}
+	100% {
+		transform: scale(1);
+	}
+}
+
+/* 旋转按钮开场动画 - 更丝滑的弹跳效果 */
+@keyframes rotationBtnBounce {
+	0% {
+		transform: translateY(120px) scale(0.2) ;
+		opacity: 0;
+	}
+	12% {
+		transform: translateY(-15px) scale(1.15) ;
+		opacity: 0.6;
+	}
+	25% {
+		transform: translateY(8px) scale(0.85) ;
+		opacity: 0.8;
+	}
+	38% {
+		transform: translateY(-8px) scale(1.08);
+		opacity: 0.9;
+	}
+	50% {
+		transform: translateY(4px) scale(0.92) ;
+		opacity: 0.95;
+	}
+	62% {
+		transform: translateY(-3px) scale(1.03);
+		opacity: 1;
+	}
+	75% {
+		transform: translateY(1px) scale(0.98);
+		opacity: 1;
+	}
+	87% {
+		transform: translateY(-1px) scale(1.01) ;
+		opacity: 1;
+	}
+	100% {
+		transform: translateY(0) scale(1);
+		opacity: 1;
+	}
 }
 
 /* 响应式设计 */
 @media (max-width: 480px) {
 	.theme-toggle {
-		position: absolute;
-		top: 10px;
-		left: 10px;
+		top: 8px;
+		left: 8px;
+		gap: 8px;
 	}
 	
-	.theme-select {
-		width: 100px;
-		min-width: auto;
-		font-size: 0.8rem;
-		padding: 8px 12px;
+	.custom-select {
+		width: 120px;
 	}
-
+	
+	.select-trigger {
+		height: 40px;
+		font-size: 14px;
+		padding: 0 8px;
+	}
+	
 	.control-toggle {
-		position: absolute;
-		top: 10px;
-		right: 10px;
-		flex-direction: row;
-		gap: 6px;
+		top: 8px;
+		right: 8px;
+		flex-direction: column;
+		gap: 4px;
 	}
 	
-	.control-toggle .icon-btn {
-		padding: 10px;
-		min-width: 40px;
-		min-height: 40px;
+	.control-btn {
+		width: 46px;
+		height: 46px;
 	}
 	
-	.control-toggle .btn-icon {
-		font-size: 1.2rem;
+	.control-btn svg {
 		width: 18px;
 		height: 18px;
 	}
 	
-	.control-toggle .btn-text {
-		display: none; /* 在小屏幕上隐藏文字，只显示图标 */
-	}
-	
 	.rotation-menu {
-		padding: 16px;
-		max-width: 100%;
-		flex-direction: column;
-		align-items: center;
-		gap: 10px;
+		padding: 8px;
 	}
 	
-	.rotation-row {
-		gap: 10px;
-		margin-bottom: 6px;
+	.rotation-container {
+		gap: 6px;
 	}
 	
 	.rotation-btn {
-		padding: 10px 6px;
-		min-height: 45px;
-		min-width: 45px;
-		flex: 1;
-		max-width: 55px;
+		min-width: 40px;
+		height: 40px;
+		font-size: 0.9rem;
 	}
 	
-	.btn-label {
-		font-size: 1.2rem;
-	}
-	
-	.btn-face {
-		font-size: 0.8rem;
-	}
-	
-	.menu-header {
-		flex-direction: column;
-		gap: 8px;
-		align-items: flex-start;
+	.rotation-row {
+		gap: 4px;
 	}
 }
 </style>

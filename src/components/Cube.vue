@@ -20,7 +20,9 @@
       <World ref="worldComponent" />
     </div>
 
+    <!-- 延迟 2 秒后渲染 RotationMenu -->
     <RotationMenu 
+      v-if="showRotationMenu"
       @toggle-dragging="handleToggleDragging"
       @reset-cube="handleResetCube"
       @reset-world-rotation="handleResetWorldRotation"
@@ -55,6 +57,9 @@ const props = defineProps({
 const worldRef = ref(null)
 const worldComponent = ref(null)
 
+// ===== 延迟渲染状态 =====
+const showRotationMenu = ref(false)
+
 // ===== Store 实例 =====
 const cubeStore = useCubeStore()
 const animationStore = useAnimationStore()
@@ -88,16 +93,19 @@ const timeline = useTimeline()
 // ===== 响应式监听器 =====
 
 // 监听魔方边长变化，实时更新魔方
-watch(() => cubeStore.config.pieceSize, (newSize, oldSize) => {
-  if (state.value.cubeInstance?.updatePieceSize) {
-    state.value.cubeInstance.updatePieceSize(newSize)
-  }
+watch(() => cubeStore.config.pieceSize, (newSize) => {
+  state.value.cubeInstance?.updatePieceSize?.(newSize)
 }, { immediate: false })
 
 // 监听圆角半径变化
-watch(() => cubeStore.config.pieceCornerRadius, (newRadius, oldRadius) => {
-  if (state.value.cubeInstance?.updatePieceCornerRadius) {
-    state.value.cubeInstance.updatePieceCornerRadius(newRadius)
+watch(() => cubeStore.config.pieceCornerRadius, (newRadius) => {
+  state.value.cubeInstance?.updatePieceCornerRadius?.(newRadius)
+}, { immediate: false })
+
+// 监听魔方类型变化，重新初始化系统
+watch(() => cubeStore.config.cubeType, (newType, oldType) => {
+  if (newType !== oldType && state.value.isInitialized) {
+    reinitializeSystem()
   }
 }, { immediate: false })
 
@@ -107,7 +115,6 @@ watch(() => cubeStore.config.theme, (newTheme) => {
     const colors = getThemeColors(newTheme)
     state.value.cubeInstance.updateColors(colors)
     
-    // 触发主题切换动画
     if (canAnimate.value) {
       triggerThemeSwitchAnimation()
     }
@@ -116,17 +123,127 @@ watch(() => cubeStore.config.theme, (newTheme) => {
 
 // ===== 核心方法 =====
 
-//初始化动画系统
+// 重新初始化系统 - 拆分成清晰的步骤
+function reinitializeSystem() {
+  // 1. 清理旧实例
+  cleanupOldInstance()
+  
+  // 2. 创建新实例
+  createNewInstance()
+  
+  // 3. 重新设置系统
+  setupSystems()
+}
+
+// 清理旧实例
+function cleanupOldInstance() {
+  if (state.value.cubeInstance?.holder && worldComponent.value?.scene) {
+    worldComponent.value.scene.remove(state.value.cubeInstance.holder)
+  }
+}
+
+// 创建新实例
+function createNewInstance() {
+  cubeStore.initCube(worldComponent.value.scene)
+  const newInstance = cubeStore.getCubeInstance()
+  if (!newInstance) return
+  
+  state.value.cubeInstance = newInstance
+  rotationQueue.setCubeInstance(newInstance)
+}
+
+// 设置系统
+function setupSystems() {
+  // 重新初始化控制模块
+  if (state.value.controls) {
+    state.value.controls.disable()
+  }
+  initControls()
+  
+  // 重新初始化动画系统
+  initAnimationSystem()
+  
+  // 触发开场动画
+  if (state.value.animationManager) {
+    triggerThemeSwitchAnimation()
+  }
+}
+
+// 初始化魔方 - 拆分成清晰的步骤
+function initCube() {
+  if (!worldComponent.value) {
+    console.warn('World 组件未准备好')
+    return false
+  }
+
+  // 1. 配置设置
+  setupInitialConfig()
+  
+  // 2. 创建魔方实例
+  createCubeInstance()
+  
+  // 3. 初始化组件
+  initComponents()
+  
+  // 4. 设置状态
+  setupInitialState()
+  
+  return state.value.animationManager ? true : false
+}
+
+// 设置初始配置
+function setupInitialConfig() {
+  cubeStore.setCubeType(props.cubeConfig.type)
+  if (props.cubeConfig.theme) {
+    cubeStore.setTheme(props.cubeConfig.theme)
+    console.log('初始化时设置主题:', props.cubeConfig.theme)
+  }
+}
+
+// 创建魔方实例
+function createCubeInstance() {
+  cubeStore.initCube(worldComponent.value.scene)
+  state.value.cubeInstance = cubeStore.getCubeInstance()
+  rotationQueue.setCubeInstance(state.value.cubeInstance)
+}
+
+// 初始化组件
+function initComponents() {
+  initControls()
+  initAnimationSystem()
+}
+
+// 设置初始状态
+function setupInitialState() {
+  state.value.cubeInstance.hideEdges()
+  
+  if (state.value.animationManager) {
+    state.value.isInitialized = true
+    console.log('魔方初始化成功')
+  }
+}
+
+// 初始化控制模块
+function initControls() {
+  if (!state.value.cubeInstance || !worldRef.value || !worldComponent.value) return false
+  
+  state.value.controls = useControls(worldRef, state.value.cubeInstance, worldComponent.value.camera, worldComponent.value)
+  state.value.controls.init()
+  state.value.controls.enable()
+  rotationQueue.setControlsInstance(state.value.controls)
+  
+  return true
+}
+
+// 初始化动画系统
 function initAnimationSystem() {
   if (!worldComponent.value) {
     console.warn('World组件未准备好，无法初始化动画系统')
     return false
   }
 
-  // 设置时间线到store
   animationStore.setTimeline(timeline)
   
-  // 创建动画管理器实例
   state.value.animationManager = new TimelineAnimationManager(
     timeline, 
     worldComponent.value.scene, 
@@ -139,67 +256,8 @@ function initAnimationSystem() {
     cubeStore
   )
   
-  // 设置到store中
   animationStore.setAnimationManager(state.value.animationManager)
-  
   console.log('动画系统初始化成功')
-  return true
-}
-
-// 现代方式：初始化魔方
-function initCube() {
-  if (!worldComponent.value) {
-    console.warn('World 组件未准备好')
-    return false
-  }
-
-  // 根据配置设置魔方类型
-  cubeStore.setCubeType(props.cubeConfig.type)
-  
-  // 设置主题 - 确保主题在初始化时就被应用
-  if (props.cubeConfig.theme) {
-    cubeStore.setTheme(props.cubeConfig.theme)
-    console.log('初始化时设置主题:', props.cubeConfig.theme)
-  }
-  
-  // 使用 store 初始化魔方
-  cubeStore.initCube(worldComponent.value.scene)
-  
-  // 获取魔方实例
-  state.value.cubeInstance = cubeStore.getCubeInstance()
-  
-  // 设置魔方实例到旋转队列
-  rotationQueue.setCubeInstance(state.value.cubeInstance)
-  
-  // 初始化控制模块
-  initControls()
-  
-  // 默认隐藏贴片
-  state.value.cubeInstance.hideEdges()
-  
-  // 初始化动画系统
-  const animationSuccess = initAnimationSystem()
-  
-  if (animationSuccess) {
-    state.value.isInitialized = true
-    console.log('魔方初始化成功')
-    return true
-  }
-  
-  return false
-}
-
-// 现代方式：初始化控制模块
-function initControls() {
-  if (!state.value.cubeInstance || !worldRef.value || !worldComponent.value) return false
-  
-  state.value.controls = useControls(worldRef, state.value.cubeInstance, worldComponent.value.camera, worldComponent.value)
-  state.value.controls.init()
-  state.value.controls.enable()
-  
-  // 设置控制实例到旋转队列
-  rotationQueue.setControlsInstance(state.value.controls)
-  
   return true
 }
 
@@ -210,7 +268,6 @@ function triggerThemeSwitchAnimation() {
   state.value.isAnimating = true
   state.value.animationManager.setupCubeEntranceTimeline(state.value.cubeInstance)
   
-  // 监听动画完成
   timeline.on('complete', () => {
     state.value.isAnimating = false
   })
@@ -220,31 +277,19 @@ function triggerThemeSwitchAnimation() {
 
 // 处理禁用/启用拖拽
 function handleToggleDragging(enabled) {
-  if (state.value.controls) {
-    if (enabled) {
-      state.value.controls.enable()
-    } else {
-      state.value.controls.disable()
-    }
-  }
+  state.value.controls?.[enabled ? 'enable' : 'disable']()
 }
 
 // 处理还原魔方
 function handleResetCube() {
-  if (state.value.cubeInstance) {
-    state.value.cubeInstance.reset()
-  }
+  state.value.cubeInstance?.reset()
   // 重新启用拖拽控制
-  if (state.value.controls) {
-    state.value.controls.enable()
-  }
+  state.value.controls?.enable()
 }
 
 // 处理重置整体旋转
 function handleResetWorldRotation() {
-	if (state.value.controls) {
-		state.value.controls.resetWorldRotation();
-	}
+  state.value.controls?.resetWorldRotation()
 }
 
 // ===== 工具函数 =====
@@ -263,18 +308,17 @@ onMounted(() => {
       triggerThemeSwitchAnimation()
     }
   }, 400)
+  
+  // 延迟 2 秒后显示 RotationMenu
+  setTimeout(() => {
+    showRotationMenu.value = true
+  }, 2000)
 })
 
 onUnmounted(() => {
-  // 清理资源
-  if (state.value.controls) {
-    state.value.controls.disable()
-  }
-  
-  if (state.value.animationManager) {
-    state.value.animationManager = null
-  }
-  
+  // 清理资源 - 使用可选链操作符简化
+  state.value.controls?.disable()
+  state.value.animationManager = null
   state.value.cubeInstance = null
   state.value.isInitialized = false
 })
@@ -333,13 +377,7 @@ onUnmounted(() => {
   position: relative;
   background: transparent;
   z-index: 10; 
-  transform: translateY(-6vh);
-}
-
-@media (max-width: 768px) {
-  .world-container {
-    transform: translateY(-10vh);
-  }
+  transform: translateY(-5vh);
 }
 
 .reset-world-btn {

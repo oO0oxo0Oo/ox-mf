@@ -3,6 +3,7 @@ import * as THREE from 'three'
 import { useTween } from './useTween'
 import { Easing } from './Easing'
 import { animationEngine } from '../animations/animationEngine'
+import { useCubeStore } from '../stores/cube'
 
 // 全局状态管理
 let animationQueue = []
@@ -13,6 +14,9 @@ let controlsInstance = null
 let currentRotationState = null
 
 export function useRotationQueue() {
+  // 获取 store 实例
+  const cubeStore = useCubeStore()
+  
   // 配置
   const DURATION = 220
   const faceConfig = {
@@ -115,6 +119,9 @@ export function useRotationQueue() {
     // 将旋转操作添加到队列
     animationQueue.push({ face, direction })
     
+    // 更新操作状态：队列有内容时禁用操作
+    cubeStore.isOperationEnabled = false
+    
     // 直接调用 useControls 的 disable 方法
     controlsInstance?.disable()
     
@@ -129,6 +136,8 @@ export function useRotationQueue() {
       isRotating = false
       // 队列为空时重新启用拖动控制
       controlsInstance?.enable()
+      // 更新操作状态：队列为空时启用操作
+      cubeStore.isOperationEnabled = true
       return
     }
 
@@ -193,6 +202,39 @@ export function useRotationQueue() {
     })
   }
 
+  // 完成当前旋转到目标位置的公共函数
+  function completeCurrentRotation() {
+    if (!currentRotationState) return
+    
+    // 计算剩余的旋转角度
+    const remainingAngle = currentRotationState.angle - currentRotationState.totalRotation
+    
+    if (Math.abs(remainingAngle) > 0.01) { // 如果还有明显的剩余角度
+      // 立即完成当前旋转到目标位置
+      const localAxis = currentRotationState.rotationAxis.clone()
+      currentRotationState.layerGroup.updateMatrixWorld()
+      const inverseMatrix = new THREE.Matrix4().copy(currentRotationState.layerGroup.matrixWorld).invert()
+      localAxis.applyMatrix4(inverseMatrix).normalize()
+      
+      // 完成剩余旋转
+      currentRotationState.layerGroup.rotateOnAxis(localAxis, remainingAngle)
+      
+      // 更新累计旋转角度，确保状态一致
+      currentRotationState.totalRotation = currentRotationState.angle
+    }
+    
+    // 清理当前旋转状态
+    cubeInstance.deselectLayer(currentRotationState.layer)
+    currentRotationState = null
+    currentTween = null
+    isRotating = false
+    
+    // 检查队列状态，如果队列为空则启用操作
+    if (animationQueue.length === 0) {
+      cubeStore.isOperationEnabled = true
+    }
+  }
+
   function clearRotationQueue() {
     animationQueue = []
     if (currentTween && currentTween.stop) {
@@ -202,6 +244,8 @@ export function useRotationQueue() {
     currentRotationState = null
     // 清空队列后重新启用拖动控制
     controlsInstance?.enable()
+    // 更新操作状态：队列清空后启用操作
+    cubeStore.isOperationEnabled = true
   }
 
   // 监听动画引擎状态，处理页面可见性变化
@@ -227,24 +271,8 @@ export function useRotationQueue() {
   function handlePageVisible() {
     // 如果有当前旋转状态且tween已停止，说明旋转被中断了
     if (currentRotationState && (!currentTween || !currentTween.state)) {
-      // 计算剩余的旋转角度
-      const remainingAngle = currentRotationState.angle - currentRotationState.totalRotation
-      
-      if (Math.abs(remainingAngle) > 0.01) { // 如果还有明显的剩余角度
-        // 立即完成当前旋转到目标位置
-        const localAxis = currentRotationState.rotationAxis.clone()
-        currentRotationState.layerGroup.updateMatrixWorld()
-        const inverseMatrix = new THREE.Matrix4().copy(currentRotationState.layerGroup.matrixWorld).invert()
-        localAxis.applyMatrix4(inverseMatrix).normalize()
-        
-        currentRotationState.layerGroup.rotateOnAxis(localAxis, remainingAngle)
-      }
-      
-      // 清理当前旋转状态
-      cubeInstance.deselectLayer(currentRotationState.layer)
-      currentRotationState = null
-      currentTween = null
-      isRotating = false
+      // 使用公共函数完成当前旋转
+      completeCurrentRotation()
       
       // 继续处理队列
       setTimeout(() => {
@@ -343,6 +371,7 @@ export function useRotationQueue() {
 
   return {
     // 状态
+    animationQueue: () => animationQueue,
     isRotating: () => isRotating,
     queueLength: () => animationQueue.length,
     hasCurrentRotation: () => currentRotationState !== null,

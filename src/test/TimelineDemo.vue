@@ -402,7 +402,7 @@ function seekTo(index) {
   color: #666;
 }
 
-@media (max-width: 768px) {
+@media (max-width: 480px) {
   .button-group {
     flex-direction: column;
     align-items: center;

@@ -143,8 +143,6 @@ export function useCube(scene) {
 		});
 	};
 
-	// ========== 四阶魔方特有的层选择方法 ==========
-
 	// 覆盖通用的getPiecePosition方法 - 四阶魔方版本
 	cube.getPiecePosition = function(piece) {
 		if (!piece || !piece.matrixWorld) return new THREE.Vector3();
@@ -178,17 +176,10 @@ export function useCube(scene) {
 			axis = cube.getMainAxis(position);
 		}
 
-		// 四阶魔方：位置值应该是 -1.5, -0.5, 0.5, 1.5
-		// 使用精确比较，因为现在位置值已经标准化
 		const targetValue = position[axis];
-		
-		// 调试信息
-		console.log(`选择层: 轴=${axis}, 目标值=${targetValue}`);
-		console.log(`完整位置对象:`, position);
 		
 		// 获取该轴上所有可能的层值
 		const allLayerValues = cube.getLayerValues(axis);
-		console.log(`轴 ${axis} 上的所有层值:`, allLayerValues);
 		
 		// 找到最接近目标值的层值
 		let closestLayerValue = allLayerValues[0];
@@ -202,8 +193,6 @@ export function useCube(scene) {
 			}
 		});
 		
-		console.log(`最接近目标值 ${targetValue} 的层值: ${closestLayerValue}`);
-		
 		// 使用精确比较，因为位置值已经标准化
 		this.pieces.forEach((piece) => {
 			const piecePosition = cube.getPiecePosition(piece);
@@ -212,18 +201,8 @@ export function useCube(scene) {
 			// 检查是否在目标层上（使用精确比较）
 			if (pieceValue === closestLayerValue) {
 				layer.push(piece.name);
-				console.log(`选中块 ${piece.name}: ${axis}=${pieceValue} (目标层值: ${closestLayerValue})`);
 			}
 		});
-
-		console.log(`层选择完成，共选中 ${layer.length} 个块`);
-		
-		// 验证选择的块是否都在正确的层上
-		if (layer.length > 0) {
-			const isValid = cube.validateLayerSelection(layer, axis, closestLayerValue);
-			console.log(`层选择验证结果: ${isValid ? '通过' : '失败'}`);
-		}
-		
 		return layer;
 	};
 
@@ -327,128 +306,7 @@ export function useCube(scene) {
 		return sortedValues;
 	};
 
-	// 新增：验证层选择的准确性
-	cube.validateLayerSelection = function(layer, axis, targetValue) {
-		if (!layer || layer.length === 0) return false;
-		
-		// 使用精确比较，因为位置值已经标准化
-		let isValid = true;
-		
-		layer.forEach((pieceIndex) => {
-			const piece = this.pieces[pieceIndex];
-			if (piece) {
-				const piecePosition = cube.getPiecePosition(piece);
-				const pieceValue = piecePosition[axis];
-				
-				// 使用精确比较
-				if (pieceValue !== targetValue) {
-					console.warn(`警告: 块 ${pieceIndex} 不在目标层上! ${axis}=${pieceValue}, 目标=${targetValue}`);
-					isValid = false;
-				}
-			}
-		});
-		
-		// 验证块数量（四阶魔方每层应该是16个块）
-		if (layer.length !== 16) {
-			console.warn(`警告: 层选择块数量不正确! 期望16个，实际${layer.length}个`);
-			isValid = false;
-		}
-		
-		return isValid;
-	};
-
-	// 新增：测试四阶魔方位置数据
-	cube.testPositions = function() {
-		console.log("=== 四阶魔方位置数据测试 ===");
-		
-		// 测试位置数据
-		console.log("位置数据总数:", positions.length);
-		console.log("预期位置数据总数: 64 (4×4×4)");
-		
-		// 检查每个轴上的层值
-		['x', 'y', 'z'].forEach(axis => {
-			const layerValues = cube.getLayerValues(axis);
-			console.log(`轴 ${axis} 上的层值:`, layerValues);
-			console.log(`轴 ${axis} 上的层数:`, layerValues.length);
-			console.log(`预期层数: 4`);
-		});
-		
-		// 检查位置范围
-		const xValues = positions.map(p => p.x);
-		const yValues = positions.map(p => p.y);
-		const zValues = positions.map(p => p.z);
-		
-		console.log("X轴位置范围:", Math.min(...xValues), "到", Math.max(...xValues));
-		console.log("Y轴位置范围:", Math.min(...yValues), "到", Math.max(...yValues));
-		console.log("Z轴位置范围:", Math.min(...zValues), "到", Math.max(...zValues));
-		
-		// 四阶魔方：位置值应该是 -1.5, -0.5, 0.5, 1.5
-		const expectedRange = [-1.5, -0.5, 0.5, 1.5];
-		console.log("预期位置值:", expectedRange);
-		
-		// 验证每个位置是否在预期范围内
-		let validPositions = 0;
-		positions.forEach((pos, index) => {
-			const xValid = expectedRange.includes(pos.x);
-			const yValid = expectedRange.includes(pos.y);
-			const zValid = expectedRange.includes(pos.z);
-			
-			if (xValid && yValid && zValid) {
-				validPositions++;
-			} else {
-				console.warn(`位置 ${index} 无效: x=${pos.x}, y=${pos.y}, z=${pos.z}`);
-			}
-		});
-		
-		console.log(`有效位置数: ${validPositions}/${positions.length}`);
-		
-		// 测试实际块的位置值
-		console.log("=== 实际块位置测试 ===");
-		if (this.pieces.length > 0) {
-			const firstPiece = this.pieces[0];
-			const piecePosition = cube.getPiecePosition(firstPiece);
-			console.log(`第一个块的位置:`, piecePosition);
-		}
-		
-		console.log("=== 测试完成 ===");
-	};
-
-	// 新增：测试所有层的选择
-	cube.testAllLayers = function() {
-		console.log("=== 四阶魔方层选择测试 ===");
-		
-		// 测试所有轴上的层选择
-		['x', 'y', 'z'].forEach(axis => {
-			console.log(`\n--- 测试轴 ${axis} ---`);
-			
-			const allLayerValues = cube.getLayerValues(axis);
-			console.log(`轴 ${axis} 上的所有层值:`, allLayerValues);
-			
-			allLayerValues.forEach(layerValue => {
-				const virtualPosition = {};
-				virtualPosition[axis] = layerValue;
-				
-				const layer = cube.getLayer(virtualPosition);
-				console.log(`层值 ${layerValue}: 选中 ${layer.length} 个块`);
-				
-				// 验证选择的块数量
-				if (layer.length !== 16) {
-					console.warn(`警告: 层值 ${layerValue} 选择的块数量不正确! 期望16个，实际${layer.length}个`);
-				}
-			});
-		});
-		
-		// 测试面层选择
-		console.log("\n--- 测试面层选择 ---");
-		const faces = ['U', 'D', 'L', 'R', 'F', 'B', 'U2', 'D2', 'L2', 'R2', 'F2', 'B2'];
-		
-		faces.forEach(face => {
-			const layer = cube.getLayerForFace(face);
-			console.log(`面 ${face}: 选中 ${layer.length} 个块`);
-		});
-		
-		console.log("=== 层选择测试完成 ===");
-	};
+	
 
 	return {
 		// 状态
@@ -481,10 +339,7 @@ export function useCube(scene) {
 
 		// 四阶魔方特有的调试方法
 		getLayerValues: cube.getLayerValues.bind(cube),
-		validateLayerSelection: cube.validateLayerSelection.bind(cube),
-		testPositions: cube.testPositions.bind(cube),
 		getLayerByDragPosition: cube.getLayerByDragPosition.bind(cube),
-		testAllLayers: cube.testAllLayers.bind(cube),
 
 		// 打乱相关方法 - 继承自CubeInterface
 		scrambleCube: cube.scrambleCube.bind(cube),

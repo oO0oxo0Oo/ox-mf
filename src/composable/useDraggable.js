@@ -71,12 +71,13 @@ export function useDraggable(targetRef, options={}) {
     }
 
     function enable() {
-        container.addEventListener("touchstart", drag.start, false);
+        // 修复：添加 passive 选项来避免性能警告
+        container.addEventListener("touchstart", drag.start, { passive: false });
         container.addEventListener("mousedown", drag.start, false);   
     }
 
     function disable() {
-        container.removeEventListener("touchstart", drag.start, false);
+        container.removeEventListener("touchstart", drag.start, { passive: false });
         container.removeEventListener("mousedown", drag.start, false);
     }
 

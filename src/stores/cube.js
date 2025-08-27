@@ -1,7 +1,6 @@
 import { defineStore } from "pinia"
-import { ref, reactive, markRaw } from 'vue'
+import { ref, reactive, markRaw, computed } from 'vue'
 import { cubeFactory } from '../models/CubeFactory.js'
-import { useRotationQueue } from '../composable/useRotationQueue.js'
 import { useScramble } from "../composable/useScramble.js"
 import { getThemeColors, getAvailableThemes as getThemeList } from '../config/themes.js'
 
@@ -9,6 +8,9 @@ export const useCubeStore = defineStore("cube", () => {
   // 核心状态
   const isInitialized = ref(false)
   const isAnimating = ref(false)
+  
+  // 魔方操作状态管理
+  const isOperationEnabled = ref(true) // true: 可操作, false: 不可操作
   
   // 配置 - 直接暴露响应式对象，外部可以直接修改
   const config = reactive({
@@ -22,8 +24,15 @@ export const useCubeStore = defineStore("cube", () => {
     edgeScale: 1.0
   })
 
-  // 魔方实例
+  // 魔方实例 - 只保留实例引用，不管理场景
   let cubeInstance = null
+  
+  // 计算属性 - 提供魔方状态信息
+  const cubeState = computed(() => ({
+    type: config.cubeType,
+    size: config.size,
+    isInitialized: isInitialized.value
+  }))
 
   // 核心方法
   function initCube(scene) {
@@ -64,7 +73,7 @@ export const useCubeStore = defineStore("cube", () => {
     return cubeInstance?.getCubeState();
   }
 
-  // 魔方类型设置 - 保留这个因为需要同时更新多个相关配置
+  // 魔方类型设置 - 只负责配置更新，不处理实例重建
   function setCubeType(type) {
     config.cubeType = type
     
@@ -81,6 +90,10 @@ export const useCubeStore = defineStore("cube", () => {
       config.pieceSize = 1/4
       config.pieceCornerRadius = 0.11
     }
+    
+    // 重置初始化状态，让组件处理实例重建
+    isInitialized.value = false
+    cubeInstance = null
   }
 
   // 主题管理方法
@@ -116,6 +129,7 @@ export const useCubeStore = defineStore("cube", () => {
     // 状态 - 直接暴露响应式引用
     isInitialized,
     isAnimating,
+    isOperationEnabled, // 魔方操作状态
     config, // 直接暴露，外部可以直接修改
     
     // 方法

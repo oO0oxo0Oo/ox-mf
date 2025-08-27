@@ -551,7 +551,7 @@ h2 {
 }
 
 /* 响应式设计 */
-@media (max-width: 768px) {
+@media (max-width: 480px) {
   .status-grid {
     grid-template-columns: 1fr;
   }
