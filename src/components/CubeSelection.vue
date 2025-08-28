@@ -17,7 +17,6 @@
               >
                 <div class="type-info">
                   <h4 class="type-name">{{ type.name }}</h4>
-                  <p class="type-desc">{{ type.description }}阶</p>
                 </div>
               </div>
             </div>
@@ -171,18 +170,15 @@ const availableThemes = ref([])
 const cubeTypes = ref([
   {
     id: 'cube2',
-    name: '2阶魔方',
-    description: '2'
+    name: '2阶魔方'
   },
   {
     id: 'cube3',
-    name: '3阶魔方',
-    description: '3'
+    name: '3阶魔方'
   },
   {
     id: 'cube4',
-    name: '4阶魔方',
-    description: '4'
+    name: '4阶魔方'
   }
 ])
 

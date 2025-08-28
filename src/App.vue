@@ -18,21 +18,29 @@
 import { ref, computed } from 'vue'
 import Begin from './components/Begin.vue'
 import Cube from './components/Cube.vue'
+import { themes } from './config/themes.js'
+import { useCubeStore } from './stores/cube.js'
 
+
+const cubeStore = useCubeStore()
 // 控制组件显示状态
 const showBegin = ref(true)
 
 // 魔方配置状态
 const cubeConfig = ref({
   type: 'cube3',  // 默认3阶魔方
-  style: 'classic' // 默认经典风格
+  theme: 'classic' // 默认经典主题
 })
 
 // 响应式背景样式计算
-const appStyle = computed(() => ({
-  background: '#FFB1A4',
-  transition: 'background 1.2s ease-in-out'
-}))
+const appStyle = computed(() => {
+  const themeName = cubeStore.config.theme
+  const currentTheme = themes[themeName]
+  return {
+    background: currentTheme.background,
+    transition: 'background 1.2s ease-in-out'
+  }
+})
 
 // 处理动画完成事件
 function handleAnimationComplete() {

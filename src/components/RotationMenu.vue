@@ -55,19 +55,19 @@ const currentThemeName = computed(() => {
 // 旋转按钮配置
 const topRowButtons = computed(() => [
 	{ face: 'U', direction: 1, label: 'U', color: getFaceColor('U') },
-	{ face: 'U', direction: -1, label: "U'", color: getFaceColor('U') },
 	{ face: 'D', direction: 1, label: 'D', color: getFaceColor('D') },
-	{ face: 'D', direction: -1, label: "D'", color: getFaceColor('D') },
 	{ face: 'L', direction: 1, label: 'L', color: getFaceColor('L') },
-	{ face: 'L', direction: -1, label: "L'", color: getFaceColor('L') },
+	{ face: 'R', direction: 1, label: 'R', color: getFaceColor('R') },
+	{ face: 'F', direction: 1, label: 'F', color: getFaceColor('F') },
+	{ face: 'B', direction: 1, label: 'B', color: getFaceColor('B') },
 ]);
 
 const bottomRowButtons = computed(() => [
-	{ face: 'R', direction: 1, label: 'R', color: getFaceColor('R') },
+	{ face: 'U', direction: -1, label: "U'", color: getFaceColor('U') },
+	{ face: 'D', direction: -1, label: "D'", color: getFaceColor('D') },
+	{ face: 'L', direction: -1, label: "L'", color: getFaceColor('L') },
 	{ face: 'R', direction: -1, label: "R'", color: getFaceColor('R') },
-	{ face: 'F', direction: 1, label: 'F', color: getFaceColor('F') },
 	{ face: 'F', direction: -1, label: "F'", color: getFaceColor('F') },
-	{ face: 'B', direction: 1, label: 'B', color: getFaceColor('B') },
 	{ face: 'B', direction: -1, label: "B'", color: getFaceColor('B') },
 ]);
 
@@ -316,7 +316,8 @@ watch(() => cubeStore.config.cubeType, (newCubeType) => {
 						'background-color': btn.color,
 						'border-color': btn.color,
 						'color': '#000',
-						'--btn-index': index
+						'--btn-index': index,
+						'width': '2.8rem',
 					}"
 					@click="handleRotate(btn.face, btn.direction)"
 					class="rotation-btn"
@@ -337,7 +338,8 @@ watch(() => cubeStore.config.cubeType, (newCubeType) => {
 						'background-color': btn.color,
 						'border-color': btn.color,
 						'color': '#000',
-						'--btn-index': index + 6
+						'--btn-index': index + 6,
+						'width': '2.8rem',
 					}"
 					@click="handleRotate(btn.face, btn.direction)"
 					class="rotation-btn"
@@ -528,9 +530,6 @@ watch(() => cubeStore.config.cubeType, (newCubeType) => {
 	animation-delay: calc(var(--btn-index, 0) * 0.12s);
 	/* 添加微妙的呼吸效果 */
 	animation-fill-mode: both;
-	/* 开场动画结束后开始呼吸效果 */
-	animation: controlBtnBounce 1.4s cubic-bezier(0.25, 0.46, 0.45, 0.94) both, controlBtnBreath 4s cubic-bezier(0.4, 0, 0.2, 1) infinite 1.6s;
-	animation-delay: calc(var(--btn-index, 0) * 0.12s), calc(var(--btn-index, 0) * 0.12s + 1.4s);
 }
 
 .control-btn:hover {

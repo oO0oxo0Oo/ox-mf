@@ -1,5 +1,5 @@
 <template>
-  <div class="cube-demo">
+  <div class="cube-demo" :style="themeStyle">
     <!-- 动态 Blob 背景 -->
     <div class="blob-background">
       <div class="blob">
@@ -39,7 +39,7 @@ import { useCubeStore } from '../stores/index.js'
 import { useAnimationStore } from '../stores/animation.js'
 import { useTimeline } from '../composable/useTimeline.js'
 import { TimelineAnimationManager } from '../animations/timelineAnimations.js'
-import { getThemeColors } from '../config/themes.js'
+import { getThemeColors, themes } from '../config/themes.js'
 import { useRotationQueue } from '../composable/useRotationQueue.js'
 
 // ===== 组件配置 =====
@@ -86,6 +86,18 @@ const canAnimate = computed(() => {
          !state.value.isAnimating && 
          state.value.animationManager
 })
+
+// 计算主题背景和blob颜色
+const currentTheme = computed(() => {
+  const themeName = cubeStore.config.theme 
+  return themes[themeName]
+})
+
+// 主题样式对象
+const themeStyle = computed(() => ({
+  '--theme-background': currentTheme.value.background,
+  '--theme-blob': currentTheme.value.blob
+}))
 
 // ===== 动画系统 =====
 const timeline = useTimeline()
@@ -332,10 +344,10 @@ onUnmounted(() => {
   height: 100vh;
   display: flex;
   flex-direction: column;
-  background: #FFB1A4;
+  background: var(--theme-background);
   position: relative;
   overflow: hidden;
-  transition: background 20s ease;
+  transition: background 4s ease;
 }
 
 /* Blob 背景容器 */
@@ -355,11 +367,12 @@ onUnmounted(() => {
   position: absolute;
   top: 0;
   left: 0;
-  fill: #023F92;
+  fill:var(--theme-blob);
   width: 50vmax;
   z-index: 1;
   animation: blobMove 20s ease-in-out infinite;
   transform-origin: 50% 50%;
+  transition: fill 4s ease;
 }
 
 /* Blob 动画关键帧 */
