@@ -766,6 +766,7 @@ watch(() => cubeStore.config.cubeType, (newCubeType) => {
 	
 	.rotation-menu {
 		padding: 8px;
+		margin-bottom: 2rem;
 	}
 	
 	.rotation-container {
@@ -779,7 +780,8 @@ watch(() => cubeStore.config.cubeType, (newCubeType) => {
 	}
 	
 	.rotation-row {
-		gap: 4px;
+		gap: 0.3rem;
+		margin-bottom: 0.5rem;
 	}
 }
 </style>

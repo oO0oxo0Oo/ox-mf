@@ -16,7 +16,10 @@
       </div>
     </div>
     
-    <div ref="worldRef" class="world-container">
+    <div ref="worldRef" class="world-container" 
+         @touchstart.prevent 
+         @touchmove.prevent 
+         @touchend.prevent>
       <World ref="worldComponent" />
     </div>
 
@@ -391,6 +394,14 @@ onUnmounted(() => {
   background: transparent;
   z-index: 10; 
   transform: translateY(-5vh);
+  /* 防止浏览器默认触摸行为 */
+  touch-action: none;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  -khtml-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
 }
 
 .reset-world-btn {
