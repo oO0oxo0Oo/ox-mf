@@ -1,8 +1,16 @@
 <script setup>
+// ===== 导入语句 =====
+// Vue 核心
+import { computed, ref, watch, onMounted, onUnmounted } from "vue";
+
+// 组合式函数和store
 import { useRotationQueue } from "../composable/useRotationQueue";
 import { useCubeStore } from "../stores/cube";
-import { computed, ref, watch, onMounted, onUnmounted } from "vue";
+
+// 配置和工具
 import { getThemeColors } from "../config/themes.js";
+
+// UI 图标
 import { 
 	Check, 
 	Close, 
@@ -12,57 +20,39 @@ import {
 	Remove 
 } from '@element-plus/icons-vue';
 
+// ===== 核心依赖 =====
 const rotationQueue = useRotationQueue();
 const cubeStore = useCubeStore();
 
+// ===== 事件定义 =====
+const emit = defineEmits(['toggle-dragging', 'reset-cube', 'reset-world-rotation']);
+
+// ===== 响应式数据 =====
 // 控制状态
 const isDraggingEnabled = ref(true);
 
-// 下拉选择器状态
+// 下拉菜单状态
 const isThemeDropdownOpen = ref(false);
 const isCubeTypeDropdownOpen = ref(false);
 
-// 定义事件
-const emit = defineEmits(['toggle-dragging', 'reset-cube', 'reset-world-rotation']);
+// 主题相关状态
+const currentTheme = ref(cubeStore.getCurrentTheme());
+const currentCubeType = ref(cubeStore.config.cubeType);
 
-const scramble = () => {
-	cubeStore.scrambleCube(rotationQueue);
-}
-const solve = () =>{
-	console.log(cubeStore.solve(),"!!!!!!")
-}
+// ===== 计算属性 =====
+// 旋转状态
+const isRotating = computed(() => rotationQueue.isRotating());
+const showRotation = computed(() => cubeStore.config.cubeType !== 'cube4');
 
-// 清空旋转队列，只保留下一个元素
-const clearRotationQueue = () => {
-	if (rotationQueue.queueLength() > 1) {
-		rotationQueue.animationQueue().splice(1);
-	} 
-	return
-};
+// 主题相关
+const availableThemes = computed(() => cubeStore.getAvailableThemes());
+const availableCubeTypes = computed(() => cubeStore.availableCubeTypes);
+const currentThemeName = computed(() => {
+  const theme = availableThemes.value.find(t => t.key === currentTheme.value);
+  return theme ? theme.name : '经典';
+});
 
-// 禁用/启用拖拽
-const toggleDragging = () => {
-	isDraggingEnabled.value = !isDraggingEnabled.value;
-	emit('toggle-dragging', isDraggingEnabled.value);
-}
-
-// 还原魔方
-const resetCube = () => {
-	emit('reset-cube');
-}
-
-// 重置整体旋转
-const resetWorldRotation = () => {
-	emit('reset-world-rotation');
-}
-
-
-// 定义点击处理函数
-const handleRotate = (face, direction = 1) => {
-	rotationQueue.addRotationToQueue(face, direction);
-};
-
-// 旋转按钮配置 - 上下两行布局
+// 旋转按钮配置
 const topRowButtons = computed(() => [
 	{ face: 'U', direction: 1, label: 'U', color: getFaceColor('U') },
 	{ face: 'U', direction: -1, label: "U'", color: getFaceColor('U') },
@@ -81,40 +71,59 @@ const bottomRowButtons = computed(() => [
 	{ face: 'B', direction: -1, label: "B'", color: getFaceColor('B') },
 ]);
 
-// 根据当前主题获取面颜色的函数
+// ===== 工具函数 =====
+// 根据当前主题获取面颜色
 function getFaceColor(face) {
 	const currentTheme = cubeStore.getCurrentTheme();
-	// 从主题配置获取颜色
 	const colors = getThemeColors(currentTheme);
 	const hexColor = colors[face];
 	
-	// 将十六进制颜色转换为CSS颜色格式，并添加透明度让颜色更接近魔方
 	const colorHex = `#${hexColor.toString(16).padStart(6, '0')}`;
 	
-	// 根据颜色亮度调整透明度，让按钮颜色更接近魔方
 	if (face === 'U' || face === 'D') {
-		// 白色和黄色使用较低透明度
 		return `${colorHex}CC`; // 80% 透明度
 	} else {
-		// 其他颜色使用中等透明度
 		return `${colorHex}99`; // 60% 透明度
 	}
 }
 
-// 计算属性
-const isRotating = computed(() => rotationQueue.isRotating());
+// ===== 核心操作方法 =====
+// 魔方操作
+const scramble = () => {
+	cubeStore.scrambleCube(rotationQueue);
+}
 
-// 主题相关
-const currentTheme = ref(cubeStore.getCurrentTheme());
-const currentCubeType = ref(cubeStore.config.cubeType);
-const availableThemes = computed(() => cubeStore.getAvailableThemes());
-const availableCubeTypes = computed(() => cubeStore.availableCubeTypes);
-const currentThemeName = computed(() => {
-  const theme = availableThemes.value.find(t => t.key === currentTheme.value);
-  return theme ? theme.name : '经典';
-});
+const solve = () => {
+	console.log(cubeStore.solve(), "!!!!!!")
+}
 
-// 主题切换处理函数
+const clearRotationQueue = () => {
+	if (rotationQueue.queueLength() > 1) {
+		rotationQueue.animationQueue().splice(1);
+	} 
+	return
+};
+
+// 旋转操作
+const handleRotate = (face, direction = 1) => {
+	rotationQueue.addRotationToQueue(face, direction);
+};
+
+// 控制操作
+const toggleDragging = () => {
+	isDraggingEnabled.value = !isDraggingEnabled.value;
+	emit('toggle-dragging', isDraggingEnabled.value);
+}
+
+const resetCube = () => {
+	emit('reset-cube');
+}
+
+const resetWorldRotation = () => {
+	emit('reset-world-rotation');
+}
+
+// ===== 主题和类型切换 =====
 const handleThemeChange = (themeKey) => {
     currentTheme.value = themeKey;
     cubeStore.setTheme(themeKey);
@@ -127,7 +136,7 @@ const handleCubeTypeChange = (cubeType) => {
   isCubeTypeDropdownOpen.value = false;
 };
 
-// 切换下拉菜单状态
+// ===== 下拉菜单控制 =====
 const toggleThemeDropdown = () => {
   isThemeDropdownOpen.value = !isThemeDropdownOpen.value;
   if (isThemeDropdownOpen.value) {
@@ -142,34 +151,30 @@ const toggleCubeTypeDropdown = () => {
   }
 };
 
-// 点击外部关闭下拉菜单
 const closeDropdowns = () => {
   isThemeDropdownOpen.value = false;
   isCubeTypeDropdownOpen.value = false;
 };
 
-// 全局点击事件处理
+// ===== 全局事件处理 =====
 const handleGlobalClick = (event) => {
-  // 检查点击是否在主题切换区域外部
   const themeToggle = document.querySelector('.theme-toggle');
   
   if (themeToggle && !themeToggle.contains(event.target)) {
-    // 如果点击在主题切换区域外，关闭所有下拉菜单
     closeDropdowns();
   }
 };
 
-// 组件挂载时添加全局点击监听
+// ===== 生命周期钩子 =====
 onMounted(() => {
   document.addEventListener('click', handleGlobalClick);
 });
 
-// 组件卸载时移除全局点击监听
 onUnmounted(() => {
   document.removeEventListener('click', handleGlobalClick);
 });
 
-// 监听store中主题的变化，同步更新本地状态
+// ===== 监听器 =====
 watch(() => cubeStore.config.theme, (newTheme) => {
   console.log('主题变化监听器触发，新主题:', newTheme);
   currentTheme.value = newTheme;
@@ -275,7 +280,7 @@ watch(() => cubeStore.config.cubeType, (newCubeType) => {
 			</button>
 		</el-tooltip>
 		
-		<el-tooltip content="打乱魔方" placement="bottom">
+		<el-tooltip content="打乱魔方" placement="bottom" v-if="showRotation">
 			<button 
 				@click="scramble"
 				class="control-btn"
@@ -285,7 +290,7 @@ watch(() => cubeStore.config.cubeType, (newCubeType) => {
 			</button>
 		</el-tooltip>
 		
-		<el-tooltip content="清空旋转队列" placement="bottom">
+		<el-tooltip content="清空旋转队列" placement="bottom" v-if="showRotation">
 			<button 
 				@click="clearRotationQueue"
 				class="control-btn"
@@ -297,7 +302,7 @@ watch(() => cubeStore.config.cubeType, (newCubeType) => {
 	</div>
 
 	<!-- 旋转菜单 - 底部中央 -->
-	<div class="rotation-menu">
+	<div class="rotation-menu" v-if="showRotation">
 		<!-- 旋转按钮 - 上下两行布局 -->
 		<div class="rotation-container">
 			<!-- 上排按钮 -->

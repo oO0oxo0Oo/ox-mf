@@ -242,18 +242,6 @@ export function useCube(scene) {
 
 		// 主题颜色支持
 		themeColors: null,
-		updateColors: function(colors) {
-			this.themeColors = colors
-			// 更新所有边的颜色
-			if (this.edges && this.edges.length > 0) {
-				const faceNames = ['L', 'R', 'D', 'U', 'B', 'F']
-				this.edges.forEach(edge => {
-					const faceIndex = faceNames.indexOf(edge.name)
-					if (faceIndex !== -1 && colors[edge.name]) {
-						edge.material.color.setHex(colors[edge.name])
-					}
-				})
-			}
-		}
+		updateColors: cube.updateColors.bind(cube)
 	};
 }

@@ -143,69 +143,6 @@ export function useCube(scene) {
 		});
 	};
 
-	// 覆盖通用的getPiecePosition方法 - 四阶魔方版本
-	cube.getPiecePosition = function(piece) {
-		if (!piece || !piece.matrixWorld) return new THREE.Vector3();
-
-		// 四阶魔方：直接使用piece的position，不需要乘以getScaleMultiplier
-		// 因为generateModel中已经正确设置了position
-		let position = piece.position.clone();
-		
-		// 将位置值除以pieceSize，得到标准化的位置坐标
-		const pieceSize = cube.geometry.pieceSize;
-		position.divideScalar(pieceSize);
-		
-		// 四舍五入到最接近的0.5的倍数，避免浮点数精度问题
-		position.x = Math.round(position.x * 2) / 2;
-		position.y = Math.round(position.y * 2) / 2;
-		position.z = Math.round(position.z * 2) / 2;
-		
-		return position;
-	};
-
-	// 覆盖通用的getLayer方法 - 四阶魔方版本
-	cube.getLayer = function(position, flipAxis = null, dragIntersectObject = null) {
-		const layer = [];
-		let axis;
-
-		if (position === false) {
-			if (!flipAxis || !dragIntersectObject) return [];
-			axis = cube.getMainAxis(flipAxis);
-			position = cube.getPiecePosition(dragIntersectObject);
-		} else {
-			axis = cube.getMainAxis(position);
-		}
-
-		const targetValue = position[axis];
-		
-		// 获取该轴上所有可能的层值
-		const allLayerValues = cube.getLayerValues(axis);
-		
-		// 找到最接近目标值的层值
-		let closestLayerValue = allLayerValues[0];
-		let minDistance = Math.abs(allLayerValues[0] - targetValue);
-		
-		allLayerValues.forEach(value => {
-			const distance = Math.abs(value - targetValue);
-			if (distance < minDistance) {
-				minDistance = distance;
-				closestLayerValue = value;
-			}
-		});
-		
-		// 使用精确比较，因为位置值已经标准化
-		this.pieces.forEach((piece) => {
-			const piecePosition = cube.getPiecePosition(piece);
-			const pieceValue = piecePosition[axis];
-			
-			// 检查是否在目标层上（使用精确比较）
-			if (pieceValue === closestLayerValue) {
-				layer.push(piece.name);
-			}
-		});
-		return layer;
-	};
-
 	// 覆盖通用的getLayerForFace方法 - 四阶魔方版本
 	cube.getLayerForFace = function(face) {
 		if (!this.pieces || this.pieces.length === 0) return [];
@@ -252,61 +189,6 @@ export function useCube(scene) {
 		return cube.getLayer(virtualPosition);
 	};
 
-	// 新增：根据拖拽位置动态选择层
-	cube.getLayerByDragPosition = function(dragPosition, axis) {
-		if (!this.pieces || this.pieces.length === 0) return [];
-
-		// 获取该轴上所有可能的层值
-		const allLayerValues = cube.getLayerValues(axis);
-		if (allLayerValues.length === 0) return [];
-
-		// 找到最接近拖拽位置的层值
-		let closestLayerValue = allLayerValues[0];
-		let minDistance = Math.abs(allLayerValues[0] - dragPosition);
-
-		allLayerValues.forEach(value => {
-			const distance = Math.abs(value - dragPosition);
-			if (distance < minDistance) {
-				minDistance = distance;
-				closestLayerValue = value;
-			}
-		});
-
-		console.log(`拖拽位置 ${dragPosition} 最接近的层值: ${closestLayerValue}`);
-
-		// 创建虚拟位置对象
-		const virtualPosition = {};
-		virtualPosition[axis] = closestLayerValue;
-
-		// 使用getLayer方法选择层
-		return cube.getLayer(virtualPosition);
-	};
-
-	// 新增：获取指定轴上的所有层值（用于调试）
-	cube.getLayerValues = function(axis) {
-		const values = new Set();
-		
-		// 四阶魔方：现在位置值应该是 -1.5, -0.5, 0.5, 1.5
-		this.pieces.forEach((piece) => {
-			const piecePosition = cube.getPiecePosition(piece);
-			const rawValue = piecePosition[axis];
-			
-			// 验证值是否在预期范围内
-			const expectedValues = [-1.5, -0.5, 0.5, 1.5];
-			if (expectedValues.includes(rawValue)) {
-				values.add(rawValue);
-			} else {
-				console.warn(`警告: 块 ${piece.name} 在轴 ${axis} 上的值 ${rawValue} 不在预期范围内`);
-			}
-		});
-		
-		const sortedValues = Array.from(values).sort((a, b) => a - b);
-		console.log(`轴 ${axis} 上的标准化层值:`, sortedValues);
-		
-		return sortedValues;
-	};
-
-	
 
 	return {
 		// 状态
@@ -337,10 +219,6 @@ export function useCube(scene) {
 		addLayerGroup: cube.addLayerGroup.bind(cube),
 		removeLayerGroup: cube.removeLayerGroup.bind(cube),
 
-		// 四阶魔方特有的调试方法
-		getLayerValues: cube.getLayerValues.bind(cube),
-		getLayerByDragPosition: cube.getLayerByDragPosition.bind(cube),
-
 		// 打乱相关方法 - 继承自CubeInterface
 		scrambleCube: cube.scrambleCube.bind(cube),
 		getScrambleState: cube.getScrambleState.bind(cube),
@@ -365,18 +243,6 @@ export function useCube(scene) {
 
 		// 主题颜色支持
 		themeColors: null,
-		updateColors: function(colors) {
-			this.themeColors = colors
-			// 更新所有边的颜色
-			if (this.edges && this.edges.length > 0) {
-				const faceNames = ['L', 'R', 'D', 'U', 'B', 'F']
-				this.edges.forEach(edge => {
-					const faceIndex = faceNames.indexOf(edge.name)
-					if (faceIndex !== -1 && colors[edge.name]) {
-						edge.material.color.setHex(colors[edge.name])
-					}
-				})
-			}
-		}
+		updateColors: cube.updateColors.bind(cube)
 	};
 }

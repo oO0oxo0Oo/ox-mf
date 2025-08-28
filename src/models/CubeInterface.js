@@ -79,7 +79,7 @@ export class CubeInterface {
       return position.round();
     }
 
-    return this.object.worldToLocal(position.sub(this.animator.position)).round();
+    return this.object.worldToLocal(position.sub(this.animator.position)).multiplyScalar(2).round().divideScalar(2);
   }
 
   // 获取向量的主轴
@@ -386,6 +386,22 @@ export class CubeInterface {
       return this.pieces[0].userData.cube.material.color.getHex();
     }
     return null;
+  }
+
+  // 更新主题颜色 - 通用实现
+  updateColors(colors) {
+    this.themeColors = colors;
+    
+    // 更新所有边的颜色
+    if (this.edges && this.edges.length > 0) {
+      const faceNames = ['L', 'R', 'D', 'U', 'B', 'F'];
+      this.edges.forEach(edge => {
+        const faceIndex = faceNames.indexOf(edge.name);
+        if (faceIndex !== -1 && colors[edge.name]) {
+          edge.material.color.setHex(colors[edge.name]);
+        }
+      });
+    }
   }
 
   // ========== 抽象方法 - 子类必须实现 ==========
