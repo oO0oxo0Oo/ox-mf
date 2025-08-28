@@ -27,8 +27,6 @@ export function useDraggable(targetRef, options={}) {
     
     const drag = {
         start: (event) => {
-            // 阻止默认行为，防止浏览器手势
-            event.preventDefault();
             
             if (event.type == "mousedown" && event.which != 1) return;
             if (event.type == "touchstart" && event.touches.length > 1) return;
@@ -49,9 +47,6 @@ export function useDraggable(targetRef, options={}) {
             window.addEventListener(touch ? "touchend" : "mouseup", drag.end, false);
         },
         move: (event) => {
-            // 阻止默认行为，防止浏览器手势
-            event.preventDefault();
-            
             if (calcDelta) {
                 position.old = position.current.clone();
             }
@@ -66,9 +61,6 @@ export function useDraggable(targetRef, options={}) {
             onDragMove(position);
         },
         end: (event) => {
-            // 阻止默认行为，防止浏览器手势
-            event.preventDefault();
-            
             getPositionCurrent(event);
 
             onDragEnd(position);
