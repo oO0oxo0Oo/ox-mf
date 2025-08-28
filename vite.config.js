@@ -6,7 +6,7 @@ import {fileURLToPath} from "node:url"
 
 // https://vite.dev/config/
 export default defineConfig({
-  base: '/ox-mf/', // 替换为你的实际仓库名
+  base: '/', // 使用自定义域名，使用根路径
   plugins: [
     vue(),
     AutoImport({
