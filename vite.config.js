@@ -6,7 +6,7 @@ import {fileURLToPath} from "node:url"
 
 // https://vite.dev/config/
 export default defineConfig({
-  base: '/', // 使用自定义域名，使用根路径
+  base: './', // 使用相对路径，支持本地文件访问
   plugins: [
     vue(),
     AutoImport({
