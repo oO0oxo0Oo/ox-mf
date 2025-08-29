@@ -57,7 +57,7 @@ export function useControls(targetRef, cubeInstance, camera, world, options = {}
 	const helperMaterial = new THREE.MeshBasicMaterial({
 		depthWrite: false,
 		transparent: true,
-		opacity: 0.5, // 设置为半透明可见
+		opacity: 0, // 设置为半透明可见
 		color: 0x0033ff,
 	});
 
