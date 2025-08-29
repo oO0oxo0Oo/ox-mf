@@ -57,7 +57,7 @@ export function useControls(targetRef, cubeInstance, camera, world, options = {}
 	const helperMaterial = new THREE.MeshBasicMaterial({
 		depthWrite: false,
 		transparent: true,
-		opacity: 0, // 设置为半透明可见
+		opacity: 0.5, // 设置为半透明可见
 		color: 0x0033ff,
 	});
 
@@ -231,7 +231,8 @@ export function useControls(targetRef, cubeInstance, camera, world, options = {}
 				rotationState.layer = layer;
 			} else {
 				// 整体旋转时，确定旋转轴（对应原始代码中的轴选择逻辑）
-				const containerWidth = 800; // 默认宽度
+				// 动态获取容器宽度，支持移动端和桌面端
+				const containerWidth = window.innerWidth || document.documentElement.clientWidth || 800;
 
 				const axis =
 					dragState.direction !== "x"
