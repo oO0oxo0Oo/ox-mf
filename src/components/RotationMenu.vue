@@ -246,7 +246,7 @@ watch(() => cubeStore.config.cubeType, (newCubeType) => {
 
 	<!-- 控制按钮 - 右上角 -->
 	<div class="control-toggle">
-		<el-tooltip content="拖拽控制" placement="bottom">
+		<el-tooltip content="拖拽控制" placement="bottom" :open-delay="100" :auto-close="1000">
 			<button 
 				@click="toggleDragging"
 				:class="{ 'disabled': !isDraggingEnabled }"
@@ -258,7 +258,7 @@ watch(() => cubeStore.config.cubeType, (newCubeType) => {
 			</button>
 		</el-tooltip>
 		
-		<el-tooltip content="还原魔方" placement="bottom">
+		<el-tooltip content="还原魔方" placement="bottom" :open-delay="100" :auto-close="600">
 			<button 
 				@click="resetCube"
 				:disabled="!cubeStore.isOperationEnabled"
@@ -269,7 +269,7 @@ watch(() => cubeStore.config.cubeType, (newCubeType) => {
 			</button>
 		</el-tooltip>
 		
-		<el-tooltip content="重置视角" placement="bottom">
+		<el-tooltip content="重置视角" placement="bottom" :open-delay="100" :auto-close="600">
 			<button 
 				@click="resetWorldRotation"
 				:disabled="!cubeStore.isOperationEnabled"
@@ -280,7 +280,7 @@ watch(() => cubeStore.config.cubeType, (newCubeType) => {
 			</button>
 		</el-tooltip>
 		
-		<el-tooltip content="打乱魔方" placement="bottom" v-if="showRotation">
+		<el-tooltip content="打乱魔方" placement="bottom" :open-delay="100" :auto-close="600" v-if="showRotation">
 			<button 
 				@click="scramble"
 				class="control-btn"
@@ -290,7 +290,7 @@ watch(() => cubeStore.config.cubeType, (newCubeType) => {
 			</button>
 		</el-tooltip>
 		
-		<el-tooltip content="清空旋转队列" placement="bottom" v-if="showRotation">
+		<el-tooltip content="清空旋转队列" placement="bottom" :open-delay="100" :auto-close="600" v-if="showRotation">
 			<button 
 				@click="clearRotationQueue"
 				class="control-btn"
